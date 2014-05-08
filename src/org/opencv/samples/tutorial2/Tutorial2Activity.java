@@ -13,8 +13,10 @@ import org.opencv.android.BaseLoaderCallback;
 import org.opencv.android.CameraBridgeViewBase.CvCameraViewFrame;
 import org.opencv.android.LoaderCallbackInterface;
 import org.opencv.android.OpenCVLoader;
+import org.opencv.core.Core;
 import org.opencv.core.CvType;
 import org.opencv.core.Mat;
+import org.opencv.core.Size;
 import org.opencv.android.CameraBridgeViewBase;
 import org.opencv.android.CameraBridgeViewBase.CvCameraViewListener2;
 import org.opencv.imgproc.Imgproc;
@@ -41,13 +43,14 @@ public class Tutorial2Activity extends Activity implements CvCameraViewListener2
     private long                   sampleTimer_old = sampleDate.getTime() / 1000;
     private long                   sampleTimer = -1;
     
+    float[] Acceleration = new float [3];
+	float[] Magnetic = new float [3];
+    private float[]                Rotation_init = new float [9];
+    private Mat                    Rotation_init_mat;
+    
     private static SensorManager   sensorService;
     private Sensor                 sensorAccelerometer;
-    private float[]                Acceleration = new float [3];
     private Sensor                 sensorMagneticField;
-    private float[]                Magnetic = new float [3];
-    private float[]                Rotation = new float [9];
-    private float[]                Inclination = new float [9];
             
     private int                    mViewMode;
     private Mat                    mRgba;
@@ -98,12 +101,6 @@ public class Tutorial2Activity extends Activity implements CvCameraViewListener2
         setContentView(R.layout.tutorial2_surface_view);
         mOpenCvCameraView = (CameraBridgeViewBase) findViewById(R.id.tutorial2_activity_surface_view);
         mOpenCvCameraView.setCvCameraViewListener(this);
-        Acceleration[0] = 0;
-        Acceleration[1] = 0;
-        Acceleration[2] = 0;
-        Magnetic[0] = 0;
-        Magnetic[1] = 0;
-        Magnetic[2] = 0;
         
         sensorService = (SensorManager) getSystemService(Context.SENSOR_SERVICE);
         sensorAccelerometer = sensorService.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
@@ -223,15 +220,29 @@ public class Tutorial2Activity extends Activity implements CvCameraViewListener2
         	sampleDate = new Date();
         	sampleTimer = sampleDate.getTime() / 1000;
         	if (sampleTimer > sampleTimer_old || samples.isEmpty()) {
+        		float[] Rotation = new float [9];
+        		float[] Inclination = new float [9];
+        		if (samples.isEmpty()) {
+        			SensorManager.getRotationMatrix(Rotation_init, Inclination, Acceleration, Magnetic);
+        			Rotation_init_mat = new Mat(3, 3, CvType.CV_32FC1);
+        			Rotation_init_mat.put(0, 0, Rotation_init);
+        		}
+        		SensorManager.getRotationMatrix(Rotation, Inclination, Acceleration, Magnetic);
+        		Mat Rotation_mat = new Mat(3, 3, CvType.CV_32FC1);
+        		Rotation_mat = new Mat(3, 3, CvType.CV_32FC1);
+        		Rotation_mat.put(0,  0,  Rotation);
+        		Mat Rotation_transform_mat = new Mat(3, 3, CvType.CV_32FC1);
+        		Mat zero_mat = Mat.zeros(3, 3, CvType.CV_32FC1);
+        		Core.gemm(Rotation_init_mat.inv(), Rotation_mat, 1, zero_mat, 0, Rotation_transform_mat);       		
+        		
         		mRgba = inputFrame.rgba();        		
         		samples.add(mRgba.clone());
-        		SensorManager.getRotationMatrix(Rotation, Inclination, Acceleration, Magnetic);
         		sampleTimer_old = sampleTimer;
         		Log.i(Debug, "acc:" + Acceleration[0] + " " + Acceleration[1] + " " + Acceleration[2]); 
         		Log.i(Debug, "mag:" + Magnetic[0] + " " + Magnetic[1] + " " + Magnetic[2]); 
-        		Log.i(Debug, "" + Rotation[0] + " " + Rotation[1] + " " + Rotation[2]); 
-        		Log.i(Debug, "" + Rotation[3] + " " + Rotation[4] + " " + Rotation[5]); 
-        		Log.i(Debug, "" + Rotation[6] + " " + Rotation[7] + " " + Rotation[8]); 
+        		float[] Rotation_transform = new float [9];
+        		Rotation_transform_mat.inv().get(0,  0, Rotation_transform);
+        		Log.i(Debug, "" + Math.atan2(Rotation_transform[3], Rotation_transform[0])); 
         		break;
         	}
         	else {
