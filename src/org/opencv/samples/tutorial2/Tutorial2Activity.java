@@ -44,6 +44,8 @@ public class Tutorial2Activity extends Activity implements CvCameraViewListener2
     private static SensorManager   sensorService;
     private Sensor                 sensorAccelerometer;
     private float[]                Acceleration = new float [3];
+    private Sensor                 sensorMagneticField;
+    private float[]                Magnetic = new float [3];
             
     private int                    mViewMode;
     private Mat                    mRgba;
@@ -97,15 +99,27 @@ public class Tutorial2Activity extends Activity implements CvCameraViewListener2
         Acceleration[0] = 0;
         Acceleration[1] = 0;
         Acceleration[2] = 0;
+        Magnetic[0] = 0;
+        Magnetic[1] = 0;
+        Magnetic[2] = 0;
         
         sensorService = (SensorManager) getSystemService(Context.SENSOR_SERVICE);
         sensorAccelerometer = sensorService.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
         if (sensorAccelerometer != null) {
-        	sensorService.registerListener(sampleAccelerometer, sensorAccelerometer, SensorManager.SENSOR_DELAY_NORMAL);
+        	sensorService.registerListener(sampleListener, sensorAccelerometer, SensorManager.SENSOR_DELAY_NORMAL);
             Log.i("Tag", "Registered for Accelerometer Sensor");
         } 
         else {
             Log.e("Tag", "Acceleromter Sensor not found");
+            finish();
+        }
+        sensorMagneticField = sensorService.getDefaultSensor(Sensor.TYPE_MAGNETIC_FIELD);
+        if (sensorMagneticField != null) {
+        	sensorService.registerListener(sampleListener, sensorMagneticField, SensorManager.SENSOR_DELAY_NORMAL);
+            Log.i("Tag", "Registered for Magnetic Field Sensor");
+        } 
+        else {
+            Log.e("Tag", "Magnetic Field Sensor not found");
             finish();
         }
     }
@@ -128,7 +142,7 @@ public class Tutorial2Activity extends Activity implements CvCameraViewListener2
         super.onPause();
         if (mOpenCvCameraView != null)
             mOpenCvCameraView.disableView();
-        sensorService.unregisterListener(sampleAccelerometer);
+        sensorService.unregisterListener(sampleListener);
     }
 
     @Override
@@ -136,14 +150,15 @@ public class Tutorial2Activity extends Activity implements CvCameraViewListener2
     {
         super.onResume();
         OpenCVLoader.initAsync(OpenCVLoader.OPENCV_VERSION_2_4_3, this, mLoaderCallback);
-        sensorService.registerListener(sampleAccelerometer, sensorAccelerometer, SensorManager.SENSOR_DELAY_NORMAL);
+        sensorService.registerListener(sampleListener, sensorAccelerometer, SensorManager.SENSOR_DELAY_NORMAL);
+        sensorService.registerListener(sampleListener, sensorMagneticField, SensorManager.SENSOR_DELAY_NORMAL);
     }
 
     public void onDestroy() {
         super.onDestroy();
         if (mOpenCvCameraView != null)
             mOpenCvCameraView.disableView();
-        sensorService.unregisterListener(sampleAccelerometer);        
+        sensorService.unregisterListener(sampleListener);        
     }
 
     public void onCameraViewStarted(int width, int height) {
@@ -209,7 +224,8 @@ public class Tutorial2Activity extends Activity implements CvCameraViewListener2
         		mRgba = inputFrame.rgba();        		
         		samples.add(mRgba.clone());
         		sampleTimer_old = sampleTimer;
-        		Log.i(Debug, "" + Acceleration[0] + " " + Acceleration[1] + " " + Acceleration[2]);        		
+        		Log.i(Debug, "acc:" + Acceleration[0] + " " + Acceleration[1] + " " + Acceleration[2]); 
+        		Log.i(Debug, "mag:" + Magnetic[0] + " " + Magnetic[1] + " " + Magnetic[2]); 
         		break;
         	}
         	else {
@@ -241,7 +257,7 @@ public class Tutorial2Activity extends Activity implements CvCameraViewListener2
         return true;
     }
     
-    private SensorEventListener sampleAccelerometer = new SensorEventListener () { 
+    private SensorEventListener sampleListener = new SensorEventListener () { 
       
         @Override
         public final void onAccuracyChanged(Sensor sensor, int accuracy) {
@@ -250,11 +266,21 @@ public class Tutorial2Activity extends Activity implements CvCameraViewListener2
       
         @Override
         public final void onSensorChanged(SensorEvent event) {
-        	Acceleration[0] = event.values[0];
-            Acceleration[1] = event.values[1];
-            Acceleration[2] = event.values[2];
+        	if (event.sensor.getType() == Sensor.TYPE_ACCELEROMETER) {
+        		Acceleration[0] = event.values[0];
+        		Acceleration[1] = event.values[1];
+        		Acceleration[2] = event.values[2];
+        	}
+        	else {
+        		if (event.sensor.getType() == Sensor.TYPE_MAGNETIC_FIELD) {
+        			Magnetic[0] = event.values[0];
+        			Magnetic[1] = event.values[1];
+        			Magnetic[2] = event.values[2];
+        		}
+            }
         }
     };
+    
 
     public native void FindFeatures(long matAddrGr, long matAddrRgba);
 }
