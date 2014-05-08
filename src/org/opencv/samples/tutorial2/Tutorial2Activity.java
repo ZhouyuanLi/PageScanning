@@ -46,6 +46,8 @@ public class Tutorial2Activity extends Activity implements CvCameraViewListener2
     private float[]                Acceleration = new float [3];
     private Sensor                 sensorMagneticField;
     private float[]                Magnetic = new float [3];
+    private float[]                Rotation = new float [9];
+    private float[]                Inclination = new float [9];
             
     private int                    mViewMode;
     private Mat                    mRgba;
@@ -223,9 +225,13 @@ public class Tutorial2Activity extends Activity implements CvCameraViewListener2
         	if (sampleTimer > sampleTimer_old || samples.isEmpty()) {
         		mRgba = inputFrame.rgba();        		
         		samples.add(mRgba.clone());
+        		SensorManager.getRotationMatrix(Rotation, Inclination, Acceleration, Magnetic);
         		sampleTimer_old = sampleTimer;
         		Log.i(Debug, "acc:" + Acceleration[0] + " " + Acceleration[1] + " " + Acceleration[2]); 
         		Log.i(Debug, "mag:" + Magnetic[0] + " " + Magnetic[1] + " " + Magnetic[2]); 
+        		Log.i(Debug, "" + Rotation[0] + " " + Rotation[1] + " " + Rotation[2]); 
+        		Log.i(Debug, "" + Rotation[3] + " " + Rotation[4] + " " + Rotation[5]); 
+        		Log.i(Debug, "" + Rotation[6] + " " + Rotation[7] + " " + Rotation[8]); 
         		break;
         	}
         	else {
