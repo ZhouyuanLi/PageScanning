@@ -1,6 +1,13 @@
 package org.opencv.samples.tutorial2;
 
-import java.util.*;
+import java.util.Date;
+import java.util.ArrayList;
+
+import android.content.Context;
+import android.hardware.SensorEvent;
+import android.hardware.SensorEventListener;
+import android.hardware.SensorManager;
+import android.hardware.Sensor;
 
 import org.opencv.android.BaseLoaderCallback;
 import org.opencv.android.CameraBridgeViewBase.CvCameraViewFrame;
@@ -33,7 +40,11 @@ public class Tutorial2Activity extends Activity implements CvCameraViewListener2
     private Date                   sampleDate = new Date();
     private long                   sampleTimer_old = sampleDate.getTime() / 1000;
     private long                   sampleTimer = -1;
-
+    
+    private static SensorManager   sensorService;
+    private Sensor                 sensorAccelerometer;
+    private float[]                Acceleration = new float [3];
+            
     private int                    mViewMode;
     private Mat                    mRgba;
     private ArrayList<Mat>         samples = new ArrayList<Mat>();
@@ -80,11 +91,23 @@ public class Tutorial2Activity extends Activity implements CvCameraViewListener2
         Log.i(TAG, "called onCreate");
         super.onCreate(savedInstanceState);
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
-
         setContentView(R.layout.tutorial2_surface_view);
-
         mOpenCvCameraView = (CameraBridgeViewBase) findViewById(R.id.tutorial2_activity_surface_view);
         mOpenCvCameraView.setCvCameraViewListener(this);
+        Acceleration[0] = 0;
+        Acceleration[1] = 0;
+        Acceleration[2] = 0;
+        
+        sensorService = (SensorManager) getSystemService(Context.SENSOR_SERVICE);
+        sensorAccelerometer = sensorService.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
+        if (sensorAccelerometer != null) {
+        	sensorService.registerListener(sampleAccelerometer, sensorAccelerometer, SensorManager.SENSOR_DELAY_NORMAL);
+            Log.i("Tag", "Registered for Accelerometer Sensor");
+        } 
+        else {
+            Log.e("Tag", "Acceleromter Sensor not found");
+            finish();
+        }
     }
 
     @Override
@@ -105,6 +128,7 @@ public class Tutorial2Activity extends Activity implements CvCameraViewListener2
         super.onPause();
         if (mOpenCvCameraView != null)
             mOpenCvCameraView.disableView();
+        sensorService.unregisterListener(sampleAccelerometer);
     }
 
     @Override
@@ -112,12 +136,14 @@ public class Tutorial2Activity extends Activity implements CvCameraViewListener2
     {
         super.onResume();
         OpenCVLoader.initAsync(OpenCVLoader.OPENCV_VERSION_2_4_3, this, mLoaderCallback);
+        sensorService.registerListener(sampleAccelerometer, sensorAccelerometer, SensorManager.SENSOR_DELAY_NORMAL);
     }
 
     public void onDestroy() {
         super.onDestroy();
         if (mOpenCvCameraView != null)
             mOpenCvCameraView.disableView();
+        sensorService.unregisterListener(sampleAccelerometer);        
     }
 
     public void onCameraViewStarted(int width, int height) {
@@ -179,11 +205,11 @@ public class Tutorial2Activity extends Activity implements CvCameraViewListener2
         case VIEW_MODE_SAVE:
         	sampleDate = new Date();
         	sampleTimer = sampleDate.getTime() / 1000;
-        	Log.i(Debug, "" + sampleTimer);
         	if (sampleTimer > sampleTimer_old || samples.isEmpty()) {
-        		mRgba = inputFrame.rgba();
+        		mRgba = inputFrame.rgba();        		
         		samples.add(mRgba.clone());
         		sampleTimer_old = sampleTimer;
+        		Log.i(Debug, "" + Acceleration[0] + " " + Acceleration[1] + " " + Acceleration[2]);        		
         		break;
         	}
         	else {
@@ -214,6 +240,21 @@ public class Tutorial2Activity extends Activity implements CvCameraViewListener2
 
         return true;
     }
+    
+    private SensorEventListener sampleAccelerometer = new SensorEventListener () { 
+      
+        @Override
+        public final void onAccuracyChanged(Sensor sensor, int accuracy) {
+        // Do something here if sensor accuracy changes.
+        }
+      
+        @Override
+        public final void onSensorChanged(SensorEvent event) {
+        	Acceleration[0] = event.values[0];
+            Acceleration[1] = event.values[1];
+            Acceleration[2] = event.values[2];
+        }
+    };
 
     public native void FindFeatures(long matAddrGr, long matAddrRgba);
 }
