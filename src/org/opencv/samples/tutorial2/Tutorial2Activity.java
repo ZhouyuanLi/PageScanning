@@ -16,6 +16,7 @@ import org.opencv.android.OpenCVLoader;
 import org.opencv.core.Core;
 import org.opencv.core.CvType;
 import org.opencv.core.Mat;
+import org.opencv.core.Point;
 import org.opencv.core.Size;
 import org.opencv.android.CameraBridgeViewBase;
 import org.opencv.android.CameraBridgeViewBase.CvCameraViewListener2;
@@ -51,6 +52,8 @@ public class Tutorial2Activity extends Activity implements CvCameraViewListener2
     private static SensorManager   sensorService;
     private Sensor                 sensorAccelerometer;
     private Sensor                 sensorMagneticField;
+    private int                    MinAccelerometerDelay;
+    private int                    MinMagneticFieldDelay;
             
     private int                    mViewMode;
     private Mat                    mRgba;
@@ -104,8 +107,9 @@ public class Tutorial2Activity extends Activity implements CvCameraViewListener2
         
         sensorService = (SensorManager) getSystemService(Context.SENSOR_SERVICE);
         sensorAccelerometer = sensorService.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
+        MinAccelerometerDelay = sensorAccelerometer.getMinDelay ();
         if (sensorAccelerometer != null) {
-        	sensorService.registerListener(sampleListener, sensorAccelerometer, SensorManager.SENSOR_DELAY_NORMAL);
+        	sensorService.registerListener(sampleListener, sensorAccelerometer, MinAccelerometerDelay);
             Log.i("Tag", "Registered for Accelerometer Sensor");
         } 
         else {
@@ -113,8 +117,9 @@ public class Tutorial2Activity extends Activity implements CvCameraViewListener2
             finish();
         }
         sensorMagneticField = sensorService.getDefaultSensor(Sensor.TYPE_MAGNETIC_FIELD);
+        MinMagneticFieldDelay = sensorMagneticField.getMinDelay();
         if (sensorMagneticField != null) {
-        	sensorService.registerListener(sampleListener, sensorMagneticField, SensorManager.SENSOR_DELAY_NORMAL);
+        	sensorService.registerListener(sampleListener, sensorMagneticField, MinMagneticFieldDelay);
             Log.i("Tag", "Registered for Magnetic Field Sensor");
         } 
         else {
@@ -149,8 +154,8 @@ public class Tutorial2Activity extends Activity implements CvCameraViewListener2
     {
         super.onResume();
         OpenCVLoader.initAsync(OpenCVLoader.OPENCV_VERSION_2_4_3, this, mLoaderCallback);
-        sensorService.registerListener(sampleListener, sensorAccelerometer, SensorManager.SENSOR_DELAY_NORMAL);
-        sensorService.registerListener(sampleListener, sensorMagneticField, SensorManager.SENSOR_DELAY_NORMAL);
+        sensorService.registerListener(sampleListener, sensorAccelerometer, MinAccelerometerDelay);
+        sensorService.registerListener(sampleListener, sensorMagneticField, MinMagneticFieldDelay);
     }
 
     public void onDestroy() {
@@ -233,15 +238,22 @@ public class Tutorial2Activity extends Activity implements CvCameraViewListener2
         		Rotation_mat.put(0,  0,  Rotation);
         		Mat Rotation_transform_mat = new Mat(3, 3, CvType.CV_32FC1);
         		Mat zero_mat = Mat.zeros(3, 3, CvType.CV_32FC1);
+        		mRgba = inputFrame.rgba(); 
         		Core.gemm(Rotation_init_mat.inv(), Rotation_mat, 1, zero_mat, 0, Rotation_transform_mat);       		
-        		
-        		mRgba = inputFrame.rgba();        		
+        		float[] Rotation_transform = new float [9];
+        		Rotation_transform_mat.inv().get(0,  0, Rotation_transform);
+        		Point center = new Point(mRgba.size().width/2, mRgba.size().height/2);
+        		double angle = -Math.atan2(Rotation_transform[3], Rotation_transform[0]) / Math.PI * 180.0;
+        		double scale = 1.0;
+        		Mat rot_mat =  new Mat(2, 3, CvType.CV_32FC1);
+        		rot_mat = Imgproc.getRotationMatrix2D(center, angle, scale);
+        		Mat mRgba_rectified = new Mat(mRgba.size(), CvType.CV_8UC4);
+        		Imgproc.warpAffine(mRgba, mRgba_rectified, rot_mat, mRgba.size());
+        		mRgba = mRgba_rectified;
         		samples.add(mRgba.clone());
         		sampleTimer_old = sampleTimer;
         		Log.i(Debug, "acc:" + Acceleration[0] + " " + Acceleration[1] + " " + Acceleration[2]); 
         		Log.i(Debug, "mag:" + Magnetic[0] + " " + Magnetic[1] + " " + Magnetic[2]); 
-        		float[] Rotation_transform = new float [9];
-        		Rotation_transform_mat.inv().get(0,  0, Rotation_transform);
         		Log.i(Debug, "" + Math.atan2(Rotation_transform[3], Rotation_transform[0])); 
         		break;
         	}
