@@ -2,6 +2,9 @@ package org.opencv.samples.tutorial2;
 
 import java.util.Date;
 import java.util.ArrayList;
+import java.util.List;
+import java.util.Iterator;
+import java.util.Vector;
 
 import android.content.Context;
 import android.hardware.SensorEvent;
@@ -16,8 +19,14 @@ import org.opencv.android.OpenCVLoader;
 import org.opencv.core.Core;
 import org.opencv.core.CvType;
 import org.opencv.core.Mat;
+import org.opencv.core.Scalar;
+import org.opencv.core.MatOfKeyPoint;
+import org.opencv.core.MatOfDMatch;
 import org.opencv.core.Point;
+import org.opencv.core.MatOfPoint2f;
 import org.opencv.core.Size;
+import org.opencv.features2d.*;
+import org.opencv.calib3d.*;
 import org.opencv.android.CameraBridgeViewBase;
 import org.opencv.android.CameraBridgeViewBase.CvCameraViewListener2;
 import org.opencv.imgproc.Imgproc;
@@ -223,42 +232,108 @@ public class Tutorial2Activity extends Activity implements CvCameraViewListener2
         	break;
         case VIEW_MODE_SAVE:
         	sampleDate = new Date();
-        	sampleTimer = sampleDate.getTime() / 1000;
-        	if (sampleTimer > sampleTimer_old || samples.isEmpty()) {
-        		float[] Rotation = new float [9];
-        		float[] Inclination = new float [9];
+        	sampleTimer = sampleDate.getTime() / 5000;
+        	if ((sampleTimer > sampleTimer_old || samples.isEmpty()) && samples.size() < 2) {
+        		mGray = inputFrame.gray();        		
         		if (samples.isEmpty()) {
-        			SensorManager.getRotationMatrix(Rotation_init, Inclination, Acceleration, Magnetic);
-        			Rotation_init_mat = new Mat(3, 3, CvType.CV_32FC1);
-        			Rotation_init_mat.put(0, 0, Rotation_init);
+        			samples.add(mGray.clone());
+        			Imgproc.cvtColor(mGray, mRgba, Imgproc.COLOR_GRAY2RGBA, 4);
         		}
-        		SensorManager.getRotationMatrix(Rotation, Inclination, Acceleration, Magnetic);
-        		Mat Rotation_mat = new Mat(3, 3, CvType.CV_32FC1);
-        		Rotation_mat = new Mat(3, 3, CvType.CV_32FC1);
-        		Rotation_mat.put(0,  0,  Rotation);
-        		Mat Rotation_transform_mat = new Mat(3, 3, CvType.CV_32FC1);
-        		Mat zero_mat = Mat.zeros(3, 3, CvType.CV_32FC1);
-        		mRgba = inputFrame.rgba(); 
-        		Core.gemm(Rotation_init_mat.inv(), Rotation_mat, 1, zero_mat, 0, Rotation_transform_mat);       		
-        		float[] Rotation_transform = new float [9];
-        		Rotation_transform_mat.inv().get(0,  0, Rotation_transform);
-        		Point center = new Point(mRgba.size().width/2, mRgba.size().height/2);
-        		double angle = -Math.atan2(Rotation_transform[3], Rotation_transform[0]) / Math.PI * 180.0;
-        		double scale = 1.0;
-        		Mat rot_mat =  new Mat(2, 3, CvType.CV_32FC1);
-        		rot_mat = Imgproc.getRotationMatrix2D(center, angle, scale);
-        		Mat mRgba_rectified = new Mat(mRgba.size(), CvType.CV_8UC4);
-        		Imgproc.warpAffine(mRgba, mRgba_rectified, rot_mat, mRgba.size());
-        		mRgba = mRgba_rectified;
-        		samples.add(mRgba.clone());
-        		sampleTimer_old = sampleTimer;
-        		Log.i(Debug, "acc:" + Acceleration[0] + " " + Acceleration[1] + " " + Acceleration[2]); 
-        		Log.i(Debug, "mag:" + Magnetic[0] + " " + Magnetic[1] + " " + Magnetic[2]); 
-        		Log.i(Debug, "" + Math.atan2(Rotation_transform[3], Rotation_transform[0])); 
-        		break;
+        		else {        			
+        			DescriptorExtractor OrbExtractor = DescriptorExtractor.create(DescriptorExtractor.ORB);
+        			FeatureDetector OrbDetector = FeatureDetector.create(FeatureDetector.ORB);
+        			DescriptorMatcher matcher = DescriptorMatcher.create(DescriptorMatcher.BRUTEFORCE_HAMMING);
+            		MatOfKeyPoint keypoints1 = new MatOfKeyPoint();
+            	    MatOfKeyPoint keypoints2 = new MatOfKeyPoint();
+                    Mat[] descriptors = new Mat[2];
+                    descriptors[0] = new Mat();
+                    descriptors[1] = new Mat();
+                    
+                    Date temp1 = new Date();
+                    long temp1_t = temp1.getTime();
+                    OrbDetector.detect(samples.get(samples.size()-1), keypoints1);
+                    OrbExtractor.compute(samples.get(samples.size()-1), keypoints1, descriptors[0]); 
+                    KeyPoint[] ArrayOfKeyPoints1 = keypoints1.toArray();
+                    OrbDetector.detect(mGray, keypoints2);
+                    OrbExtractor.compute(mGray, keypoints2, descriptors[1]);
+                    KeyPoint[] ArrayOfKeyPoints2 = keypoints2.toArray();
+                   
+                    ArrayList<MatOfDMatch> AllMatches = new ArrayList<MatOfDMatch>();
+                    AllMatches.add(new MatOfDMatch());
+                    AllMatches.add(new MatOfDMatch());
+                    matcher.knnMatch(descriptors[0], descriptors[1], AllMatches, 2);
+                    
+                    int length = AllMatches.size();
+                    
+                    ArrayList<Point> ArrayListOfPoints1 = new ArrayList<Point>();
+                    ArrayList<Point> ArrayListOfPoints2 = new ArrayList<Point>();
+                    for (int i = 0; i < length; i++) {
+                    	DMatch[] ArrayOfDMatch = AllMatches.get(i).toArray();
+                    	int index1 = ArrayOfDMatch[0].queryIdx;
+                    	float distance1 = ArrayOfDMatch[0].distance;
+                    	int index2 = ArrayOfDMatch[0].trainIdx;
+                    	float distance2 = ArrayOfDMatch[1].distance;
+                    	if (distance1 < 0.6 * distance2) {
+                    		ArrayListOfPoints1.add(ArrayOfKeyPoints1[index1].pt);
+                    		ArrayListOfPoints2.add(ArrayOfKeyPoints2[index2].pt);
+                    	}
+                    }
+                    
+                    Point [] ArrayOfPoints1 = new Point [ArrayListOfPoints1.size()];
+                    Point [] ArrayOfPoints2 = new Point [ArrayListOfPoints2.size()];
+                    ArrayListOfPoints1.toArray(ArrayOfPoints1);
+                    ArrayListOfPoints2.toArray(ArrayOfPoints2);
+                    for (int i = 0; i < ArrayOfPoints1.length; i++) {
+                    	Imgproc.cvtColor(samples.get(0), mRgba, Imgproc.COLOR_GRAY2RGBA, 4);
+                    	
+                    	Core.circle(mRgba, ArrayOfPoints1[i], 10, new Scalar(255, 255, 255, 255));
+                    	Imgproc.cvtColor(mRgba, samples.get(0), Imgproc.COLOR_RGBA2GRAY, 1);                    	
+                    }             
+                    MatOfPoint2f MatOfpoints1 = new MatOfPoint2f(ArrayOfPoints1);
+                    MatOfPoint2f MatOfpoints2 = new MatOfPoint2f(ArrayOfPoints2);
+                    double[] HomographyArray = new double [9];
+                    Mat HomographyMatrix = Calib3d.findHomography(MatOfpoints2, MatOfpoints1, Calib3d.RANSAC, 1);
+                    Mat mGray_transformed = new Mat(mGray.size(), CvType.CV_8UC1);
+                    Imgproc.warpPerspective(mGray, mGray_transformed, HomographyMatrix, mGray.size());
+                    HomographyMatrix.get(0,  0, HomographyArray);                    
+                    Date temp2 = new Date();
+                    long temp2_t = temp2.getTime();
+                    //Log.i(Debug, "" + temp1_t + " " + temp2_t + " ");
+                    //Log.i(Debug, "" + HomographyArray[0] + " " + HomographyArray[1] + " " + HomographyArray[2]);
+                    //Log.i(Debug, "" + HomographyArray[3] + " " + HomographyArray[4] + " " + HomographyArray[5]);
+                    //Log.i(Debug, "" + HomographyArray[6] + " " + HomographyArray[7] + " " + HomographyArray[8]);
+                    samples.add(mGray_transformed.clone());
+                    samples.add(mGray.clone());
+                    for (int i = 0; i < ArrayOfPoints2.length; i++) {
+                    	Imgproc.cvtColor(samples.get(2), mRgba, Imgproc.COLOR_GRAY2RGBA, 4);	
+                    	Core.circle(mRgba, ArrayOfPoints2[i], 10, new Scalar(255, 255, 255, 255));
+                    	Imgproc.cvtColor(mRgba, samples.get(2), Imgproc.COLOR_RGBA2GRAY, 1);                    	
+                    }               
+                    //Imgproc.cvtColor(mGray_transformed, mRgba, Imgproc.COLOR_GRAY2RGBA, 4);
+        	    }
+                sampleTimer_old = sampleTimer;
+                break;
         	}
         	else {
-        		mRgba = samples.get(samples.size() - 1);
+        		if (samples.size() == 1) {
+        			mGray = samples.get(0);
+        		}
+        		else {
+        			Date temp3 = new Date();
+        			long temp3_t = temp3.getTime();
+        			if ((double)temp3_t / 1000 - temp3_t / 1000 < 0.33) {
+        				mGray = samples.get(0);
+        			}
+        			else {
+        				if ((double)temp3_t / 1000 - temp3_t / 1000 < 0.66) {
+        					mGray = samples.get(1);
+        				}
+        				else {
+        					mGray = samples.get(2);
+        				}
+        			}        			
+        		}
+        		Imgproc.cvtColor(mGray, mRgba, Imgproc.COLOR_GRAY2RGBA, 4);
         		break;
         	}
         }
