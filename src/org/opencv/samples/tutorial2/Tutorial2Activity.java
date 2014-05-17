@@ -67,6 +67,7 @@ public class Tutorial2Activity extends Activity implements CvCameraViewListener2
     private int                    mViewMode;
     private Mat                    mRgba;
     private ArrayList<Mat>         samples = new ArrayList<Mat>();
+    private ArrayList<Mat>         samples_circle = new ArrayList<Mat>();
     private Mat                    mIntermediateMat;
     private Mat                    mGray;
 
@@ -233,10 +234,11 @@ public class Tutorial2Activity extends Activity implements CvCameraViewListener2
         case VIEW_MODE_SAVE:
         	sampleDate = new Date();
         	sampleTimer = sampleDate.getTime() / 5000;
-        	if ((sampleTimer > sampleTimer_old || samples.isEmpty()) && samples.size() < 2) {
+        	if (sampleTimer > sampleTimer_old || samples.isEmpty()) {
         		mGray = inputFrame.gray();        		
         		if (samples.isEmpty()) {
         			samples.add(mGray.clone());
+        			samples_circle.add(mGray.clone());
         			Imgproc.cvtColor(mGray, mRgba, Imgproc.COLOR_GRAY2RGBA, 4);
         		}
         		else {        			
@@ -274,10 +276,8 @@ public class Tutorial2Activity extends Activity implements CvCameraViewListener2
                     	int index2 = ArrayOfDMatch[0].trainIdx;
                     	float distance2 = ArrayOfDMatch[1].distance;
                     	if (distance1 < 0.6 * distance2) {
-                    		if (Math.abs(ArrayOfKeyPoints1[index1].pt.y - ArrayOfKeyPoints2[index2].pt.y) < 20) {
-                    			ArrayListOfPoints1.add(ArrayOfKeyPoints1[index1].pt);
-                    			ArrayListOfPoints2.add(ArrayOfKeyPoints2[index2].pt);
-                    		}
+                    		ArrayListOfPoints1.add(ArrayOfKeyPoints1[index1].pt);
+                    		ArrayListOfPoints2.add(ArrayOfKeyPoints2[index2].pt);
                     	}
                     }
                     
@@ -285,12 +285,11 @@ public class Tutorial2Activity extends Activity implements CvCameraViewListener2
                     Point [] ArrayOfPoints2 = new Point [ArrayListOfPoints2.size()];
                     ArrayListOfPoints1.toArray(ArrayOfPoints1);
                     ArrayListOfPoints2.toArray(ArrayOfPoints2);
+                    Imgproc.cvtColor(samples.get(0), mRgba, Imgproc.COLOR_GRAY2RGBA, 4);
                     for (int i = 0; i < ArrayOfPoints1.length; i++) {
-                    	Imgproc.cvtColor(samples.get(0), mRgba, Imgproc.COLOR_GRAY2RGBA, 4);
-                    	
-                    	Core.circle(mRgba, ArrayOfPoints1[i], 10, new Scalar(255, 255, 255, 255));
-                    	Imgproc.cvtColor(mRgba, samples.get(0), Imgproc.COLOR_RGBA2GRAY, 1);                    	
-                    }             
+                    	Core.circle(mRgba, ArrayOfPoints1[i], 10, new Scalar(255, 255, 255, 255));                    	
+                    }
+                    Imgproc.cvtColor(mRgba, samples_circle.get(0), Imgproc.COLOR_RGBA2GRAY, 1);
                     MatOfPoint2f MatOfpoints1 = new MatOfPoint2f(ArrayOfPoints1);
                     MatOfPoint2f MatOfpoints2 = new MatOfPoint2f(ArrayOfPoints2);
                     double[] HomographyArray = new double [9];
@@ -305,8 +304,9 @@ public class Tutorial2Activity extends Activity implements CvCameraViewListener2
                     //Log.i(Debug, "" + HomographyArray[3] + " " + HomographyArray[4] + " " + HomographyArray[5]);
                     //Log.i(Debug, "" + HomographyArray[6] + " " + HomographyArray[7] + " " + HomographyArray[8]);
                     samples.add(mGray_transformed.clone());
-                    for (int i = 0; i < ArrayOfPoints2.length; i++) {
-                    	Imgproc.cvtColor(samples.get(1), mRgba, Imgproc.COLOR_GRAY2RGBA, 4);
+                    samples_circle.add(mGray_transformed.clone());
+                    Imgproc.cvtColor(samples.get(samples.size() - 1), mRgba, Imgproc.COLOR_GRAY2RGBA, 4);
+                    for (int i = 0; i < ArrayOfPoints2.length; i++) {                    	
                     	Mat HomoPoint = new Mat(3, 1, CvType.CV_64FC1);
                     	Mat TransHomoPoint = new Mat(3, 1, CvType.CV_64FC1);
                     	HomoPoint.put(0, 0, (double)ArrayOfPoints2[i].x);
@@ -315,27 +315,15 @@ public class Tutorial2Activity extends Activity implements CvCameraViewListener2
                     	Core.gemm(HomographyMatrix, HomoPoint, 1.0, Mat.zeros(3, 1, CvType.CV_64FC1), 0.0, TransHomoPoint);  
                     	ArrayOfPoints2[i].x = TransHomoPoint.get(0, 0)[0] / TransHomoPoint.get(2, 0)[0];
                     	ArrayOfPoints2[i].y = TransHomoPoint.get(1, 0)[0] / TransHomoPoint.get(2, 0)[0];                    	
-                    	Core.circle(mRgba, ArrayOfPoints2[i], 10, new Scalar(255, 255, 255, 255));
-                    	Imgproc.cvtColor(mRgba, samples.get(1), Imgproc.COLOR_RGBA2GRAY, 4);                    	
-                    }               
-        	    }
+                    	Core.circle(mRgba, ArrayOfPoints2[i], 10, new Scalar(255, 255, 255, 255));                   	
+                    }
+                    Imgproc.cvtColor(mRgba, samples_circle.get(samples_circle.size() - 1), Imgproc.COLOR_RGBA2GRAY, 1);
+        		}
                 sampleTimer_old = sampleTimer;
                 break;
         	}
         	else {
-        		if (samples.size() == 1) {
-        			mGray = samples.get(0);
-        		}
-        		else {
-        			Date temp3 = new Date();
-        			long temp3_t = temp3.getTime();
-        			if ((double)temp3_t / 1000 - temp3_t / 1000 < 0.5) {
-        				mGray = samples.get(0);
-        			}
-        			else {
-        				mGray = samples.get(1);
-        			}
-        		}
+        		mGray = samples_circle.get(samples_circle.size() - 1);
         		Imgproc.cvtColor(mGray, mRgba, Imgproc.COLOR_GRAY2RGBA, 4);
         		break;
         	}
