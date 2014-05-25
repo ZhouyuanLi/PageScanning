@@ -12,6 +12,8 @@ import android.hardware.SensorEventListener;
 import android.hardware.SensorManager;
 import android.hardware.Sensor;
 
+import android.os.AsyncTask;
+
 import org.opencv.android.BaseLoaderCallback;
 import org.opencv.android.CameraBridgeViewBase.CvCameraViewFrame;
 import org.opencv.android.LoaderCallbackInterface;
@@ -42,19 +44,20 @@ public class Tutorial2Activity extends Activity implements CvCameraViewListener2
 	private static final String    TAG = "OCVSample::Activity";
 	private static final String    Debug = "Debug";
 
-    private static final int       VIEW_MODE_RGBA     = 0;
-    private static final int       VIEW_MODE_GRAY     = 1;
-    private static final int       VIEW_MODE_CANNY    = 2;
-    private static final int       VIEW_MODE_FEATURES = 5;
-    private static final int       VIEW_MODE_THRESH = 3;
-    private static final int       VIEW_MODE_SAVE = 4;
+	private static final int       RGBA = 0;
+    private static final int       GLOBAL = 1;
+    private static final int       PLAY_BACK = 2;
+    private static final int       SAVE = 3;
     
     private Date                   sampleDate = new Date();
-    private long                   sampleTimer_old = sampleDate.getTime() / 1000;
+    private long                   sampleTimer_old = sampleDate.getTime() / 100;
     private long                   sampleTimer = -1;
     
-    float[] Acceleration = new float [3];
-	float[] Magnetic = new float [3];
+    BackgroundStitching            task;
+    private boolean                stable = true;
+    
+    float[]                        Acceleration = new float [3];
+	float[]                        Magnetic = new float [3];
     private float[]                Rotation_init = new float [9];
     private Mat                    Rotation_init_mat;
     
@@ -71,14 +74,95 @@ public class Tutorial2Activity extends Activity implements CvCameraViewListener2
     private Mat                    mIntermediateMat;
     private Mat                    mGray;
 
-    private MenuItem               mItemPreviewRGBA;
-    private MenuItem               mItemPreviewGray;
-    private MenuItem               mItemPreviewCanny;
-    private MenuItem               mItemPreviewFeatures;
-    private MenuItem 			   mItemPreviewThresh;
+    private MenuItem               mItemPreviewRgba;
+    private MenuItem               mItemPreviewGlobal;
+    private MenuItem               mItemPreviewPlayback;
     private MenuItem 			   mItemPreviewSave;
 
     private CameraBridgeViewBase   mOpenCvCameraView;
+    
+    private class BackgroundStitching extends AsyncTask<Mat, Void, String> {
+        @Override
+        protected String doInBackground(Mat... A) {
+        	if (samples.size() > 0) {
+	        	DescriptorExtractor OrbExtractor = DescriptorExtractor.create(DescriptorExtractor.ORB);
+				FeatureDetector OrbDetector = FeatureDetector.create(FeatureDetector.ORB);
+				DescriptorMatcher matcher = DescriptorMatcher.create(DescriptorMatcher.BRUTEFORCE_HAMMING);
+	    		MatOfKeyPoint keypoints1 = new MatOfKeyPoint();
+	    	    MatOfKeyPoint keypoints2 = new MatOfKeyPoint();
+	            Mat[] descriptors = new Mat[2];
+	            descriptors[0] = new Mat();
+	            descriptors[1] = new Mat();
+	            OrbDetector.detect(samples.get(0), keypoints1);
+	            OrbExtractor.compute(samples.get(0), keypoints1, descriptors[0]); 
+	            KeyPoint[] ArrayOfKeyPoints1 = keypoints1.toArray();
+	            OrbDetector.detect(A[0], keypoints2);
+	            OrbExtractor.compute(A[0], keypoints2, descriptors[1]);
+	            KeyPoint[] ArrayOfKeyPoints2 = keypoints2.toArray();
+	           
+	            ArrayList<MatOfDMatch> AllMatches = new ArrayList<MatOfDMatch>();
+	            AllMatches.add(new MatOfDMatch());
+	            AllMatches.add(new MatOfDMatch());
+	            matcher.knnMatch(descriptors[0], descriptors[1], AllMatches, 2);
+	            
+	            int length = AllMatches.size();
+	            
+	            ArrayList<Point> ArrayListOfPoints1 = new ArrayList<Point>();
+	            ArrayList<Point> ArrayListOfPoints2 = new ArrayList<Point>();
+	            for (int i = 0; i < length; i++) {
+	            	DMatch[] ArrayOfDMatch = AllMatches.get(i).toArray();
+	            	int index1 = ArrayOfDMatch[0].queryIdx;
+	            	float distance1 = ArrayOfDMatch[0].distance;
+	            	int index2 = ArrayOfDMatch[0].trainIdx;
+	            	float distance2 = ArrayOfDMatch[1].distance;
+	            	if (distance1 < 0.6 * distance2) {
+	            		ArrayListOfPoints1.add(ArrayOfKeyPoints1[index1].pt);
+	            		ArrayListOfPoints2.add(ArrayOfKeyPoints2[index2].pt);
+	            	}
+	            }
+	            if (ArrayListOfPoints1.size() >= 10) {	            
+		            Point [] ArrayOfPoints1 = new Point [ArrayListOfPoints1.size()];
+		            Point [] ArrayOfPoints2 = new Point [ArrayListOfPoints2.size()];
+		            ArrayListOfPoints1.toArray(ArrayOfPoints1);
+		            ArrayListOfPoints2.toArray(ArrayOfPoints2);
+		            Mat temp_image = new Mat(A[0].size(), CvType.CV_8UC4);
+		            Imgproc.cvtColor(samples.get(0), temp_image, Imgproc.COLOR_GRAY2RGBA, 4);
+		            for (int i = 0; i < ArrayOfPoints1.length; i++) {
+		            	Core.circle(temp_image, ArrayOfPoints1[i], 10, new Scalar(255, 255, 255, 255));                    	
+		            }
+		            Imgproc.cvtColor(temp_image, samples_circle.get(0), Imgproc.COLOR_RGBA2GRAY, 1);
+		            MatOfPoint2f MatOfpoints1 = new MatOfPoint2f(ArrayOfPoints1);
+		            MatOfPoint2f MatOfpoints2 = new MatOfPoint2f(ArrayOfPoints2);
+		            Mat HomographyMatrix = Calib3d.findHomography(MatOfpoints2, MatOfpoints1, Calib3d.RANSAC, 1);
+		            Mat input_transformed = new Mat(A[0].size(), CvType.CV_8UC1);
+		            Imgproc.warpPerspective(A[0], input_transformed, HomographyMatrix, A[0].size());                    
+		            samples.add(input_transformed.clone());
+		            samples_circle.add(input_transformed.clone());
+		            Imgproc.cvtColor(samples_circle.get(samples.size() - 1), temp_image, Imgproc.COLOR_GRAY2RGBA, 4);
+		            for (int i = 0; i < ArrayOfPoints2.length; i++) {                    	
+		            	Mat HomoPoint = new Mat(3, 1, CvType.CV_64FC1);
+		            	Mat TransHomoPoint = new Mat(3, 1, CvType.CV_64FC1);
+		            	HomoPoint.put(0, 0, (double)ArrayOfPoints2[i].x);
+		            	HomoPoint.put(1, 0, (double)ArrayOfPoints2[i].y);
+		            	HomoPoint.put(2, 0, 1.0);
+		            	Core.gemm(HomographyMatrix, HomoPoint, 1.0, Mat.zeros(3, 1, CvType.CV_64FC1), 0.0, TransHomoPoint);  
+		            	ArrayOfPoints2[i].x = TransHomoPoint.get(0, 0)[0] / TransHomoPoint.get(2, 0)[0];
+		            	ArrayOfPoints2[i].y = TransHomoPoint.get(1, 0)[0] / TransHomoPoint.get(2, 0)[0];                    	
+		            	Core.circle(temp_image, ArrayOfPoints2[i], 10, new Scalar(255, 255, 255, 255));                   	
+		            }
+		            Imgproc.cvtColor(temp_image, samples_circle.get(samples.size() - 1), Imgproc.COLOR_RGBA2GRAY, 1);
+	            }
+        	}
+        	stable = true;
+			return "" + samples.size();
+        }
+        
+        @Override
+        protected void onPostExecute(String result) {
+        	//Log.i(Debug, "" + result);
+        }
+    }
+    
 
     private BaseLoaderCallback  mLoaderCallback = new BaseLoaderCallback(this) {
         @Override
@@ -141,11 +225,9 @@ public class Tutorial2Activity extends Activity implements CvCameraViewListener2
     @Override
     public boolean onCreateOptionsMenu(Menu menu) {
         Log.i(TAG, "called onCreateOptionsMenu");
-        mItemPreviewRGBA = menu.add("Preview RGBA");
-        mItemPreviewGray = menu.add("Preview GRAY");
-        mItemPreviewCanny = menu.add("Canny");
-        mItemPreviewFeatures = menu.add("Find features");
-        mItemPreviewThresh = menu.add("Thresh"); 
+        mItemPreviewRgba = menu.add("Rgba");
+        mItemPreviewGlobal = menu.add("Global");
+        mItemPreviewPlayback = menu.add("Playback");
         mItemPreviewSave = menu.add("Save");
         return true;
     }
@@ -190,163 +272,57 @@ public class Tutorial2Activity extends Activity implements CvCameraViewListener2
     public Mat onCameraFrame(CvCameraViewFrame inputFrame) {
         final int viewMode = mViewMode;
         switch (viewMode) {
-        case VIEW_MODE_GRAY:
-            // input frame has gray scale format
-            Imgproc.cvtColor(inputFrame.gray(), mRgba, Imgproc.COLOR_GRAY2RGBA, 4);
-            break;
-        case VIEW_MODE_RGBA:
-            // input frame has RBGA format
-            mRgba = inputFrame.rgba();
-            break;
-        case VIEW_MODE_CANNY:
-            // input frame has gray scale format
-            mRgba = inputFrame.rgba();
-            Imgproc.Canny(inputFrame.gray(), mIntermediateMat, 80, 100);
-            Imgproc.cvtColor(mIntermediateMat, mRgba, Imgproc.COLOR_GRAY2RGBA, 4);
-            break;
-        case VIEW_MODE_FEATURES:
-            // input frame has RGBA format
-            mRgba = inputFrame.rgba();
-            mGray = inputFrame.gray();
-            FindFeatures(mGray.getNativeObjAddr(), mRgba.getNativeObjAddr());
-            break;
-        case VIEW_MODE_THRESH:
-        	mRgba = inputFrame.rgba(); 
-        	int maxValue = 255; 
-        	int blockSize = 61; 
-        	int meanOffset = 15; 
-        	Imgproc.adaptiveThreshold( 
-        	inputFrame.gray(), 
-        	 mIntermediateMat, 
-        	 maxValue, 
-        	 Imgproc.ADAPTIVE_THRESH_MEAN_C, 
-        	 Imgproc.THRESH_BINARY_INV, 
-        	 blockSize, 
-        	 meanOffset 
-        	); 
-        	Imgproc.cvtColor( 
-        	mIntermediateMat, 
-        	mRgba, 
-        	Imgproc.COLOR_GRAY2RGBA, 
-        	4 
-        	); 
+        case RGBA:
+        	mRgba = inputFrame.rgba();
+        	if (stable == true && samples.size() > 0) {
+        		samples.clear();
+        		samples_circle.clear();
+        	}
         	break;
-        case VIEW_MODE_SAVE:
-        	sampleDate = new Date();
-        	sampleTimer = sampleDate.getTime() / 5000;
-        	if (sampleTimer > sampleTimer_old || samples.isEmpty()) {
-        		mGray = inputFrame.gray();        		
-        		if (samples.isEmpty()) {
-        			samples.add(mGray.clone());
-        			samples_circle.add(mGray.clone());
-        			Imgproc.cvtColor(mGray, mRgba, Imgproc.COLOR_GRAY2RGBA, 4);
-        		}
-        		else {        			
-        			DescriptorExtractor OrbExtractor = DescriptorExtractor.create(DescriptorExtractor.ORB);
-        			FeatureDetector OrbDetector = FeatureDetector.create(FeatureDetector.ORB);
-        			DescriptorMatcher matcher = DescriptorMatcher.create(DescriptorMatcher.BRUTEFORCE_HAMMING);
-            		MatOfKeyPoint keypoints1 = new MatOfKeyPoint();
-            	    MatOfKeyPoint keypoints2 = new MatOfKeyPoint();
-                    Mat[] descriptors = new Mat[2];
-                    descriptors[0] = new Mat();
-                    descriptors[1] = new Mat();
-                    
-                    Date temp1 = new Date();
-                    long temp1_t = temp1.getTime();
-                    OrbDetector.detect(samples.get(samples.size()-1), keypoints1);
-                    OrbExtractor.compute(samples.get(samples.size()-1), keypoints1, descriptors[0]); 
-                    KeyPoint[] ArrayOfKeyPoints1 = keypoints1.toArray();
-                    OrbDetector.detect(mGray, keypoints2);
-                    OrbExtractor.compute(mGray, keypoints2, descriptors[1]);
-                    KeyPoint[] ArrayOfKeyPoints2 = keypoints2.toArray();
-                   
-                    ArrayList<MatOfDMatch> AllMatches = new ArrayList<MatOfDMatch>();
-                    AllMatches.add(new MatOfDMatch());
-                    AllMatches.add(new MatOfDMatch());
-                    matcher.knnMatch(descriptors[0], descriptors[1], AllMatches, 2);
-                    
-                    int length = AllMatches.size();
-                    
-                    ArrayList<Point> ArrayListOfPoints1 = new ArrayList<Point>();
-                    ArrayList<Point> ArrayListOfPoints2 = new ArrayList<Point>();
-                    for (int i = 0; i < length; i++) {
-                    	DMatch[] ArrayOfDMatch = AllMatches.get(i).toArray();
-                    	int index1 = ArrayOfDMatch[0].queryIdx;
-                    	float distance1 = ArrayOfDMatch[0].distance;
-                    	int index2 = ArrayOfDMatch[0].trainIdx;
-                    	float distance2 = ArrayOfDMatch[1].distance;
-                    	if (distance1 < 0.6 * distance2) {
-                    		ArrayListOfPoints1.add(ArrayOfKeyPoints1[index1].pt);
-                    		ArrayListOfPoints2.add(ArrayOfKeyPoints2[index2].pt);
-                    	}
-                    }
-                    
-                    Point [] ArrayOfPoints1 = new Point [ArrayListOfPoints1.size()];
-                    Point [] ArrayOfPoints2 = new Point [ArrayListOfPoints2.size()];
-                    ArrayListOfPoints1.toArray(ArrayOfPoints1);
-                    ArrayListOfPoints2.toArray(ArrayOfPoints2);
-                    Imgproc.cvtColor(samples.get(0), mRgba, Imgproc.COLOR_GRAY2RGBA, 4);
-                    for (int i = 0; i < ArrayOfPoints1.length; i++) {
-                    	Core.circle(mRgba, ArrayOfPoints1[i], 10, new Scalar(255, 255, 255, 255));                    	
-                    }
-                    Imgproc.cvtColor(mRgba, samples_circle.get(0), Imgproc.COLOR_RGBA2GRAY, 1);
-                    MatOfPoint2f MatOfpoints1 = new MatOfPoint2f(ArrayOfPoints1);
-                    MatOfPoint2f MatOfpoints2 = new MatOfPoint2f(ArrayOfPoints2);
-                    double[] HomographyArray = new double [9];
-                    Mat HomographyMatrix = Calib3d.findHomography(MatOfpoints2, MatOfpoints1, Calib3d.RANSAC, 1);
-                    Mat mGray_transformed = new Mat(mGray.size(), CvType.CV_8UC1);
-                    Imgproc.warpPerspective(mGray, mGray_transformed, HomographyMatrix, mGray.size());
-                    HomographyMatrix.get(0,  0, HomographyArray);                    
-                    Date temp2 = new Date();
-                    long temp2_t = temp2.getTime();
-                    //Log.i(Debug, "" + temp1_t + " " + temp2_t + " ");
-                    //Log.i(Debug, "" + HomographyArray[0] + " " + HomographyArray[1] + " " + HomographyArray[2]);
-                    //Log.i(Debug, "" + HomographyArray[3] + " " + HomographyArray[4] + " " + HomographyArray[5]);
-                    //Log.i(Debug, "" + HomographyArray[6] + " " + HomographyArray[7] + " " + HomographyArray[8]);
-                    samples.add(mGray_transformed.clone());
-                    samples_circle.add(mGray_transformed.clone());
-                    Imgproc.cvtColor(samples.get(samples.size() - 1), mRgba, Imgproc.COLOR_GRAY2RGBA, 4);
-                    for (int i = 0; i < ArrayOfPoints2.length; i++) {                    	
-                    	Mat HomoPoint = new Mat(3, 1, CvType.CV_64FC1);
-                    	Mat TransHomoPoint = new Mat(3, 1, CvType.CV_64FC1);
-                    	HomoPoint.put(0, 0, (double)ArrayOfPoints2[i].x);
-                    	HomoPoint.put(1, 0, (double)ArrayOfPoints2[i].y);
-                    	HomoPoint.put(2, 0, 1.0);
-                    	Core.gemm(HomographyMatrix, HomoPoint, 1.0, Mat.zeros(3, 1, CvType.CV_64FC1), 0.0, TransHomoPoint);  
-                    	ArrayOfPoints2[i].x = TransHomoPoint.get(0, 0)[0] / TransHomoPoint.get(2, 0)[0];
-                    	ArrayOfPoints2[i].y = TransHomoPoint.get(1, 0)[0] / TransHomoPoint.get(2, 0)[0];                    	
-                    	Core.circle(mRgba, ArrayOfPoints2[i], 10, new Scalar(255, 255, 255, 255));                   	
-                    }
-                    Imgproc.cvtColor(mRgba, samples_circle.get(samples_circle.size() - 1), Imgproc.COLOR_RGBA2GRAY, 1);
-        		}
-                sampleTimer_old = sampleTimer;
-                break;
+        case GLOBAL:
+        	mGray = inputFrame.gray();
+        	Imgproc.cvtColor(inputFrame.gray(), mRgba, Imgproc.COLOR_GRAY2RGBA, 4);
+        	if (stable == true && samples.size() == 0) {
+        		samples.add(mGray.clone());
+        		samples_circle.add(mGray.clone());
+        	}            
+            break;
+        case PLAY_BACK:
+        	if (samples.size() > 0) {
+        		Date Playback = new Date();
+        		long PlaybackTimer = Playback.getTime() / 1000;
+        	    mGray = samples_circle.get((int)(PlaybackTimer % samples.size()));
         	}
         	else {
-        		mGray = samples_circle.get(samples_circle.size() - 1);
-        		Imgproc.cvtColor(mGray, mRgba, Imgproc.COLOR_GRAY2RGBA, 4);
-        		break;
+        		mGray = inputFrame.gray();
+        	}
+        	Imgproc.cvtColor(mGray, mRgba, Imgproc.COLOR_GRAY2RGBA, 4);
+            break;
+        case SAVE:
+        	mGray = inputFrame.gray();
+        	Imgproc.cvtColor(inputFrame.gray(), mRgba, Imgproc.COLOR_GRAY2RGBA, 4);
+        	sampleDate = new Date();
+        	sampleTimer = sampleDate.getTime() / 100;
+        	if (stable == true && sampleTimer > sampleTimer_old) {
+        		sampleTimer_old = sampleTimer;
+        		stable = false;
+        		task = new BackgroundStitching();
+        	    task.execute(new Mat[] { mGray.clone() });
         	}
         }
-
         return mRgba;
     }
 
     public boolean onOptionsItemSelected(MenuItem item) {
         Log.i(TAG, "called onOptionsItemSelected; selected item: " + item);
-
-        if (item == mItemPreviewRGBA) {
-            mViewMode = VIEW_MODE_RGBA;
-        } else if (item == mItemPreviewGray) {
-            mViewMode = VIEW_MODE_GRAY;
-        } else if (item == mItemPreviewCanny) {
-            mViewMode = VIEW_MODE_CANNY;
-        } else if (item == mItemPreviewFeatures) {
-            mViewMode = VIEW_MODE_FEATURES;
-        } else if (item == mItemPreviewThresh) {
-        	mViewMode = VIEW_MODE_THRESH; 
-        } else if (item == mItemPreviewSave) {
-        	mViewMode = VIEW_MODE_SAVE; 
+        if (item == mItemPreviewRgba) {
+            mViewMode = RGBA;
+        }  else if (item == mItemPreviewGlobal) {
+            mViewMode = GLOBAL;
+        }  else if (item == mItemPreviewPlayback) {
+            mViewMode = PLAY_BACK;
+        }  else if (item == mItemPreviewSave) {
+        	mViewMode = SAVE; 
         }
 
         return true;
