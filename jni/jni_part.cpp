@@ -404,22 +404,17 @@ JNIEXPORT void JNICALL Java_org_opencv_samples_tutorial2_Tutorial2Activity_FindF
         LOGLN("Features in image #" << i+1 << ": " << features[i].keypoints.size());
         resize(full_img, img, Size(), seam_scale, seam_scale);
         images[i] = img.clone();
-        if (i == 0) {
-        	errorCode.at<double>(0, 0) = featuresi.keypoints.size() * 1000000;
-        }
-        else {
-        	errorCode.at<double>(0, 0) = errorCode.at<double>(0, 0) + featuresi.keypoints.size();
-        }
       }
+
+      finder->collectGarbage();
+      full_img.release();
+      img.release();
+
+      LOGLN("Finding features, time: " << ((getTickCount() - t) / getTickFrequency()) << " sec");
+      errorCode.at<double>(0, 0) = 6;
       img_names.clear();
       return;
-//
-//    finder->collectGarbage();
-//    full_img.release();
-//    img.release();
-//
-//    LOGLN("Finding features, time: " << ((getTickCount() - t) / getTickFrequency()) << " sec");
-//
+
 //    LOG("Pairwise matching");
 //#if ENABLE_LOG
 //    t = getTickCount();

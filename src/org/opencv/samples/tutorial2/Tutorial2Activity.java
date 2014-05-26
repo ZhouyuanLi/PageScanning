@@ -50,11 +50,12 @@ public class Tutorial2Activity extends Activity implements CvCameraViewListener2
     private static final int       SAVE = 3;
     
     private Date                   sampleDate = new Date();
-    private long                   sampleTimer_old = sampleDate.getTime() / 100;
+    private long                   sampleTimer_old = sampleDate.getTime() / 5000;
     private long                   sampleTimer = -1;
     
     BackgroundStitching            task;
-    private boolean                stable = true;
+    private boolean                clear = false;
+    private boolean                postprocessing = false;
     
     float[]                        Acceleration = new float [3];
 	float[]                        Magnetic = new float [3];
@@ -69,8 +70,8 @@ public class Tutorial2Activity extends Activity implements CvCameraViewListener2
             
     private int                    mViewMode;
     private Mat                    mRgba;
-    private ArrayList<Mat>         samples = new ArrayList<Mat>();
-    private ArrayList<Mat>         samples_circle = new ArrayList<Mat>();
+    private ArrayList<Mat>         input_samples = new ArrayList<Mat>();
+    private ArrayList<Mat>         processing_samples = new ArrayList<Mat>();
     private Mat                    mIntermediateMat;
     private Mat                    mGray;
 
@@ -81,80 +82,102 @@ public class Tutorial2Activity extends Activity implements CvCameraViewListener2
 
     private CameraBridgeViewBase   mOpenCvCameraView;
     
-    private class BackgroundStitching extends AsyncTask<Mat, Void, String> {
+    private class BackgroundStitching extends AsyncTask<String, Void, String> {
         @Override
-        protected String doInBackground(Mat... A) {
-        	if (samples.size() > 0) {
-	        	DescriptorExtractor OrbExtractor = DescriptorExtractor.create(DescriptorExtractor.ORB);
-				FeatureDetector OrbDetector = FeatureDetector.create(FeatureDetector.ORB);
-				DescriptorMatcher matcher = DescriptorMatcher.create(DescriptorMatcher.BRUTEFORCE_HAMMING);
-	    		MatOfKeyPoint keypoints1 = new MatOfKeyPoint();
-	    	    MatOfKeyPoint keypoints2 = new MatOfKeyPoint();
-	            Mat[] descriptors = new Mat[2];
-	            descriptors[0] = new Mat();
-	            descriptors[1] = new Mat();
-	            OrbDetector.detect(samples.get(0), keypoints1);
-	            OrbExtractor.compute(samples.get(0), keypoints1, descriptors[0]); 
-	            KeyPoint[] ArrayOfKeyPoints1 = keypoints1.toArray();
-	            OrbDetector.detect(A[0], keypoints2);
-	            OrbExtractor.compute(A[0], keypoints2, descriptors[1]);
-	            KeyPoint[] ArrayOfKeyPoints2 = keypoints2.toArray();
-	           
-	            ArrayList<MatOfDMatch> AllMatches = new ArrayList<MatOfDMatch>();
-	            AllMatches.add(new MatOfDMatch());
-	            AllMatches.add(new MatOfDMatch());
-	            matcher.knnMatch(descriptors[0], descriptors[1], AllMatches, 2);
-	            
-	            int length = AllMatches.size();
-	            
-	            ArrayList<Point> ArrayListOfPoints1 = new ArrayList<Point>();
-	            ArrayList<Point> ArrayListOfPoints2 = new ArrayList<Point>();
-	            for (int i = 0; i < length; i++) {
-	            	DMatch[] ArrayOfDMatch = AllMatches.get(i).toArray();
-	            	int index1 = ArrayOfDMatch[0].queryIdx;
-	            	float distance1 = ArrayOfDMatch[0].distance;
-	            	int index2 = ArrayOfDMatch[0].trainIdx;
-	            	float distance2 = ArrayOfDMatch[1].distance;
-	            	if (distance1 < 0.6 * distance2) {
-	            		ArrayListOfPoints1.add(ArrayOfKeyPoints1[index1].pt);
-	            		ArrayListOfPoints2.add(ArrayOfKeyPoints2[index2].pt);
-	            	}
-	            }
-	            if (ArrayListOfPoints1.size() >= 10) {	            
-		            Point [] ArrayOfPoints1 = new Point [ArrayListOfPoints1.size()];
-		            Point [] ArrayOfPoints2 = new Point [ArrayListOfPoints2.size()];
-		            ArrayListOfPoints1.toArray(ArrayOfPoints1);
-		            ArrayListOfPoints2.toArray(ArrayOfPoints2);
-		            Mat temp_image = new Mat(A[0].size(), CvType.CV_8UC4);
-		            Imgproc.cvtColor(samples.get(0), temp_image, Imgproc.COLOR_GRAY2RGBA, 4);
-		            for (int i = 0; i < ArrayOfPoints1.length; i++) {
-		            	Core.circle(temp_image, ArrayOfPoints1[i], 10, new Scalar(255, 255, 255, 255));                    	
+        protected String doInBackground(String... A) {
+        	while (true) {
+        		if (clear == true) {
+        			input_samples.clear();
+        			processing_samples.clear();
+        			clear = false;
+        			postprocessing = false;
+        			continue;
+        		}
+        		if (isCancelled()) {
+        			postprocessing = true;
+        			break;
+        		}
+	        	int size_i = input_samples.size();
+	        	int size_p = processing_samples.size();
+	        	if (size_i != size_p) {        		 
+	    			processing_samples.add(input_samples.get(size_p));
+	        		double[] errorCounter = new double [1];
+	        		errorCounter[0] = 0;
+	        		Mat errorCode = new Mat(1, 1, CvType.CV_64FC1);
+	        		errorCode.put(0, 0, errorCounter);
+	        		FindFeatures(processing_samples.get(0).getNativeObjAddr(), processing_samples.get(processing_samples.size() - 1).getNativeObjAddr(), errorCode.getNativeObjAddr());
+	        		errorCode.get(0, 0, errorCounter);
+	        		Log.i(Debug, "" + errorCounter[0]);
+		        	/*DescriptorExtractor OrbExtractor = DescriptorExtractor.create(DescriptorExtractor.ORB);
+					FeatureDetector OrbDetector = FeatureDetector.create(FeatureDetector.ORB);
+					DescriptorMatcher matcher = DescriptorMatcher.create(DescriptorMatcher.BRUTEFORCE_HAMMING);
+		    		MatOfKeyPoint keypoints1 = new MatOfKeyPoint();
+		    	    MatOfKeyPoint keypoints2 = new MatOfKeyPoint();
+		            Mat[] descriptors = new Mat[2];
+		            descriptors[0] = new Mat();
+		            descriptors[1] = new Mat();
+		            OrbDetector.detect(samples.get(0), keypoints1);
+		            OrbExtractor.compute(samples.get(0), keypoints1, descriptors[0]); 
+		            KeyPoint[] ArrayOfKeyPoints1 = keypoints1.toArray();
+		            OrbDetector.detect(A[0], keypoints2);
+		            OrbExtractor.compute(A[0], keypoints2, descriptors[1]);
+		            KeyPoint[] ArrayOfKeyPoints2 = keypoints2.toArray();
+		           
+		            ArrayList<MatOfDMatch> AllMatches = new ArrayList<MatOfDMatch>();
+		            AllMatches.add(new MatOfDMatch());
+		            AllMatches.add(new MatOfDMatch());
+		            matcher.knnMatch(descriptors[0], descriptors[1], AllMatches, 2);
+		            
+		            int length = AllMatches.size();
+		            
+		            ArrayList<Point> ArrayListOfPoints1 = new ArrayList<Point>();
+		            ArrayList<Point> ArrayListOfPoints2 = new ArrayList<Point>();
+		            for (int i = 0; i < length; i++) {
+		            	DMatch[] ArrayOfDMatch = AllMatches.get(i).toArray();
+		            	int index1 = ArrayOfDMatch[0].queryIdx;
+		            	float distance1 = ArrayOfDMatch[0].distance;
+		            	int index2 = ArrayOfDMatch[0].trainIdx;
+		            	float distance2 = ArrayOfDMatch[1].distance;
+		            	if (distance1 < 0.6 * distance2) {
+		            		ArrayListOfPoints1.add(ArrayOfKeyPoints1[index1].pt);
+		            		ArrayListOfPoints2.add(ArrayOfKeyPoints2[index2].pt);
+		            	}
 		            }
-		            Imgproc.cvtColor(temp_image, samples_circle.get(0), Imgproc.COLOR_RGBA2GRAY, 1);
-		            MatOfPoint2f MatOfpoints1 = new MatOfPoint2f(ArrayOfPoints1);
-		            MatOfPoint2f MatOfpoints2 = new MatOfPoint2f(ArrayOfPoints2);
-		            Mat HomographyMatrix = Calib3d.findHomography(MatOfpoints2, MatOfpoints1, Calib3d.RANSAC, 1);
-		            Mat input_transformed = new Mat(A[0].size(), CvType.CV_8UC1);
-		            Imgproc.warpPerspective(A[0], input_transformed, HomographyMatrix, A[0].size());                    
-		            samples.add(input_transformed.clone());
-		            samples_circle.add(input_transformed.clone());
-		            Imgproc.cvtColor(samples_circle.get(samples.size() - 1), temp_image, Imgproc.COLOR_GRAY2RGBA, 4);
-		            for (int i = 0; i < ArrayOfPoints2.length; i++) {                    	
-		            	Mat HomoPoint = new Mat(3, 1, CvType.CV_64FC1);
-		            	Mat TransHomoPoint = new Mat(3, 1, CvType.CV_64FC1);
-		            	HomoPoint.put(0, 0, (double)ArrayOfPoints2[i].x);
-		            	HomoPoint.put(1, 0, (double)ArrayOfPoints2[i].y);
-		            	HomoPoint.put(2, 0, 1.0);
-		            	Core.gemm(HomographyMatrix, HomoPoint, 1.0, Mat.zeros(3, 1, CvType.CV_64FC1), 0.0, TransHomoPoint);  
-		            	ArrayOfPoints2[i].x = TransHomoPoint.get(0, 0)[0] / TransHomoPoint.get(2, 0)[0];
-		            	ArrayOfPoints2[i].y = TransHomoPoint.get(1, 0)[0] / TransHomoPoint.get(2, 0)[0];                    	
-		            	Core.circle(temp_image, ArrayOfPoints2[i], 10, new Scalar(255, 255, 255, 255));                   	
-		            }
-		            Imgproc.cvtColor(temp_image, samples_circle.get(samples.size() - 1), Imgproc.COLOR_RGBA2GRAY, 1);
-	            }
+		            if (ArrayListOfPoints1.size() >= 10) {	            
+			            Point [] ArrayOfPoints1 = new Point [ArrayListOfPoints1.size()];
+			            Point [] ArrayOfPoints2 = new Point [ArrayListOfPoints2.size()];
+			            ArrayListOfPoints1.toArray(ArrayOfPoints1);
+			            ArrayListOfPoints2.toArray(ArrayOfPoints2);
+			            Mat temp_image = new Mat(A[0].size(), CvType.CV_8UC4);
+			            Imgproc.cvtColor(samples.get(0), temp_image, Imgproc.COLOR_GRAY2RGBA, 4);
+			            for (int i = 0; i < ArrayOfPoints1.length; i++) {
+			            	Core.circle(temp_image, ArrayOfPoints1[i], 10, new Scalar(255, 255, 255, 255));                    	
+			            }
+			            Imgproc.cvtColor(temp_image, samples_circle.get(0), Imgproc.COLOR_RGBA2GRAY, 1);
+			            MatOfPoint2f MatOfpoints1 = new MatOfPoint2f(ArrayOfPoints1);
+			            MatOfPoint2f MatOfpoints2 = new MatOfPoint2f(ArrayOfPoints2);
+			            Mat HomographyMatrix = Calib3d.findHomography(MatOfpoints2, MatOfpoints1, Calib3d.RANSAC, 1);
+			            Mat input_transformed = new Mat(A[0].size(), CvType.CV_8UC1);
+			            Imgproc.warpPerspective(A[0], input_transformed, HomographyMatrix, A[0].size());                    
+			            samples.add(input_transformed.clone());
+			            samples_circle.add(input_transformed.clone());
+			            Imgproc.cvtColor(samples_circle.get(samples.size() - 1), temp_image, Imgproc.COLOR_GRAY2RGBA, 4);
+			            for (int i = 0; i < ArrayOfPoints2.length; i++) {                    	
+			            	Mat HomoPoint = new Mat(3, 1, CvType.CV_64FC1);
+			            	Mat TransHomoPoint = new Mat(3, 1, CvType.CV_64FC1);
+			            	HomoPoint.put(0, 0, (double)ArrayOfPoints2[i].x);
+			            	HomoPoint.put(1, 0, (double)ArrayOfPoints2[i].y);
+			            	HomoPoint.put(2, 0, 1.0);
+			            	Core.gemm(HomographyMatrix, HomoPoint, 1.0, Mat.zeros(3, 1, CvType.CV_64FC1), 0.0, TransHomoPoint);  
+			            	ArrayOfPoints2[i].x = TransHomoPoint.get(0, 0)[0] / TransHomoPoint.get(2, 0)[0];
+			            	ArrayOfPoints2[i].y = TransHomoPoint.get(1, 0)[0] / TransHomoPoint.get(2, 0)[0];                    	
+			            	Core.circle(temp_image, ArrayOfPoints2[i], 10, new Scalar(255, 255, 255, 255));                   	
+			            }
+			            Imgproc.cvtColor(temp_image, samples_circle.get(samples.size() - 1), Imgproc.COLOR_RGBA2GRAY, 1);
+		            }*/
+		        }
         	}
-        	stable = true;
-			return "" + samples.size();
+        	return "" + processing_samples.size();
         }
         
         @Override
@@ -220,6 +243,8 @@ public class Tutorial2Activity extends Activity implements CvCameraViewListener2
             Log.e("Tag", "Magnetic Field Sensor not found");
             finish();
         }
+        task = new BackgroundStitching();
+	    task.execute(new String[] { "start" });
     }
 
     @Override
@@ -239,6 +264,7 @@ public class Tutorial2Activity extends Activity implements CvCameraViewListener2
         if (mOpenCvCameraView != null)
             mOpenCvCameraView.disableView();
         sensorService.unregisterListener(sampleListener);
+        task.cancel(true);
     }
 
     @Override
@@ -248,13 +274,16 @@ public class Tutorial2Activity extends Activity implements CvCameraViewListener2
         OpenCVLoader.initAsync(OpenCVLoader.OPENCV_VERSION_2_4_3, this, mLoaderCallback);
         sensorService.registerListener(sampleListener, sensorAccelerometer, MinAccelerometerDelay);
         sensorService.registerListener(sampleListener, sensorMagneticField, MinMagneticFieldDelay);
+        task = new BackgroundStitching();
+	    task.execute(new String[] { "start" });
     }
 
     public void onDestroy() {
         super.onDestroy();
         if (mOpenCvCameraView != null)
             mOpenCvCameraView.disableView();
-        sensorService.unregisterListener(sampleListener);        
+        sensorService.unregisterListener(sampleListener);
+        task.cancel(true);
     }
 
     public void onCameraViewStarted(int width, int height) {
@@ -274,40 +303,35 @@ public class Tutorial2Activity extends Activity implements CvCameraViewListener2
         switch (viewMode) {
         case RGBA:
         	mRgba = inputFrame.rgba();
-        	if (stable == true && samples.size() > 0) {
-        		samples.clear();
-        		samples_circle.clear();
-        	}
+        	clear = true;
         	break;
         case GLOBAL:
         	mGray = inputFrame.gray();
         	Imgproc.cvtColor(inputFrame.gray(), mRgba, Imgproc.COLOR_GRAY2RGBA, 4);
-        	if (stable == true && samples.size() == 0) {
+        	/*if (stable == true && input_samples.size() == 0) {
         		samples.add(mGray.clone());
         		samples_circle.add(mGray.clone());
-        	}            
+        	}*/            
             break;
         case PLAY_BACK:
-        	if (samples.size() > 0) {
+        	/*if (samples.size() > 0) {
         		Date Playback = new Date();
         		long PlaybackTimer = Playback.getTime() / 1000;
         	    mGray = samples_circle.get((int)(PlaybackTimer % samples.size()));
         	}
-        	else {
+        	else {*/
         		mGray = inputFrame.gray();
-        	}
+        	//}
         	Imgproc.cvtColor(mGray, mRgba, Imgproc.COLOR_GRAY2RGBA, 4);
             break;
         case SAVE:
         	mGray = inputFrame.gray();
         	Imgproc.cvtColor(inputFrame.gray(), mRgba, Imgproc.COLOR_GRAY2RGBA, 4);
         	sampleDate = new Date();
-        	sampleTimer = sampleDate.getTime() / 100;
-        	if (stable == true && sampleTimer > sampleTimer_old) {
+        	sampleTimer = sampleDate.getTime() / 5000;
+        	if (clear == false && sampleTimer > sampleTimer_old) {
         		sampleTimer_old = sampleTimer;
-        		stable = false;
-        		task = new BackgroundStitching();
-        	    task.execute(new Mat[] { mGray.clone() });
+        		input_samples.add(mGray.clone());
         	}
         }
         return mRgba;
@@ -353,5 +377,5 @@ public class Tutorial2Activity extends Activity implements CvCameraViewListener2
     };
     
 
-    public native void FindFeatures(long matAddrGr, long matAddrRgba);
+    public native void FindFeatures(long FirstAddr, long SecondAddr, long errorCodeAddr);
 }
