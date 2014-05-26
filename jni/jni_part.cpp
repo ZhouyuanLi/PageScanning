@@ -21,7 +21,7 @@ using namespace cv;
 using namespace cv::detail;
 
 extern "C" {
-JNIEXPORT void JNICALL Java_org_opencv_samples_tutorial2_Tutorial2Activity_FindFeatures(JNIEnv*, jobject, jlong addrGray, jlong addrRgba, jlong addrNum);
+JNIEXPORT void JNICALL Java_org_opencv_samples_tutorial2_Tutorial2Activity_FindFeatures(JNIEnv*, jobject, jlong addrFirst, jlong addrSecond, jlong errorCodeAddr);
 
 static void printUsage()
 {
@@ -286,25 +286,23 @@ static int parseCmdArgs(int argc, char** argv)
 }
 
 
-JNIEXPORT void JNICALL Java_org_opencv_samples_tutorial2_Tutorial2Activity_FindFeatures(JNIEnv*, jobject, jlong addrGray, jlong addrRgba, jlong addrNum)
+JNIEXPORT void JNICALL Java_org_opencv_samples_tutorial2_Tutorial2Activity_FindFeatures(JNIEnv*, jobject, jlong addrFirst, jlong addrSecond, jlong errorCodeAddr)
 {
-    Mat& mRgb0  = *(Mat*)addrGray;
-    Mat& mRgb = *(Mat*)addrRgba;
-    Mat& mNum = *(Mat*)addrNum;
-    mNum.at<uchar>(0, 0) = 9;
-    return;
+    Mat& mFirst  = *(Mat*)addrFirst;
+    Mat& mSecond = *(Mat*)addrSecond;
+    Mat& errorCode = *(Mat*)errorCodeAddr;
+    errorCode.at<double>(0, 0) = 1;
     int NUM_OF_IMAGES = 2;
     int argc = NUM_OF_IMAGES + 1 + 2;
     char** argv = new char* [argc];
     argv[1] = new char [10000];
-    strcpy(argv[1], "C:\\Users\\zhouyuanl\\Documents\\images_2\\1.jpg");
+    strcpy(argv[1], "first.jpg");
     argv[2] = new char [10000];
-    strcpy(argv[2], "C:\\Users\\zhouyuanl\\Documents\\images_2\\2.jpg");
+    strcpy(argv[2], "second.jpg");
     argv[NUM_OF_IMAGES + 1] = new char [10000];
     strcpy(argv[NUM_OF_IMAGES + 1], "--warp");
     argv[NUM_OF_IMAGES + 2] = new char [10000];
     strcpy(argv[NUM_OF_IMAGES + 2], "plane");
-
 
 #if ENABLE_LOG
     int64 app_start_time = getTickCount();
@@ -312,17 +310,19 @@ JNIEXPORT void JNICALL Java_org_opencv_samples_tutorial2_Tutorial2Activity_FindF
 
     cv::setBreakOnError(true);
 
-    //int retval = parseCmdArgs(argc, argv);
-    int retval = 0;
+    int retval = parseCmdArgs(argc, argv);
+
     if (retval) {
-        //return retval;
+    	errorCode.at<double>(0, 0) = 2;
+        return;
     }
     // Check if have enough images
     int num_images = static_cast<int>(img_names.size());
     if (num_images < 2)
     {
         LOGLN("Need more images");
-        //return -1;
+        errorCode.at<double>(0, 0) = 3;
+        return;
     }
 
     double work_scale = 1, seam_scale = 1, compose_scale = 1;
@@ -350,7 +350,8 @@ JNIEXPORT void JNICALL Java_org_opencv_samples_tutorial2_Tutorial2Activity_FindF
     else
     {
         cout << "Unknown 2D features type: '" << features_type << "'.\n";
-        //return -1;
+        errorCode.at<double>(0, 0) = 4;
+        return;
     }
 
     Mat full_img, img;
@@ -361,16 +362,20 @@ JNIEXPORT void JNICALL Java_org_opencv_samples_tutorial2_Tutorial2Activity_FindF
 
     for (int i = 0; i < num_images; ++i)
     {
-    	string& img_namesi = img_names[i];//????
-        //full_img = imread(img_namesi);
-        full_img = mRgb;
+    	if (i == 0) {
+    		full_img = mFirst;
+    	} else {
+    		full_img = mSecond;
+    	}
     	full_img_sizes[i] = full_img.size();
 
         if (full_img.empty())
         {
             LOGLN("Can't open image " << img_names[i]);
-            //return -1;
+            errorCode.at<double>(0, 0) = 5;
+            return;
         }
+
         if (work_megapix < 0)
         {
             img = full_img;
@@ -396,12 +401,18 @@ JNIEXPORT void JNICALL Java_org_opencv_samples_tutorial2_Tutorial2Activity_FindF
         (*finder)(img, features[i]);
         ImageFeatures& featuresi = features[i];
         featuresi.img_idx = i;
-        //mNum = (long)featuresi.keypoints.size();
         LOGLN("Features in image #" << i+1 << ": " << features[i].keypoints.size());
-
         resize(full_img, img, Size(), seam_scale, seam_scale);
         images[i] = img.clone();
+        if (i == 0) {
+        	errorCode.at<double>(0, 0) = featuresi.keypoints.size() * 1000000;
+        }
+        else {
+        	errorCode.at<double>(0, 0) = errorCode.at<double>(0, 0) + featuresi.keypoints.size();
+        }
       }
+      img_names.clear();
+      return;
 //
 //    finder->collectGarbage();
 //    full_img.release();
