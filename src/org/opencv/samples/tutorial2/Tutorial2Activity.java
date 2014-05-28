@@ -1,5 +1,6 @@
 package org.opencv.samples.tutorial2;
 
+import java.io.File;
 import java.util.Date;
 import java.util.ArrayList;
 import java.util.List;
@@ -11,8 +12,8 @@ import android.hardware.SensorEvent;
 import android.hardware.SensorEventListener;
 import android.hardware.SensorManager;
 import android.hardware.Sensor;
-
 import android.os.AsyncTask;
+import android.os.Environment;
 
 import org.opencv.android.BaseLoaderCallback;
 import org.opencv.android.CameraBridgeViewBase.CvCameraViewFrame;
@@ -31,6 +32,7 @@ import org.opencv.features2d.*;
 import org.opencv.calib3d.*;
 import org.opencv.android.CameraBridgeViewBase;
 import org.opencv.android.CameraBridgeViewBase.CvCameraViewListener2;
+import org.opencv.highgui.Highgui;
 import org.opencv.imgproc.Imgproc;
 
 import android.app.Activity;
@@ -44,145 +46,43 @@ public class Tutorial2Activity extends Activity implements CvCameraViewListener2
 	private static final String    TAG = "OCVSample::Activity";
 	private static final String    Debug = "Debug";
 
-	private static final int       RGBA = 0;
-    private static final int       GLOBAL = 1;
-    private static final int       PLAY_BACK = 2;
-    private static final int       SAVE = 3;
+	private static final int       CAMERA = 0;
+    private static final int       GALLERY = 1;
+    private static final int       STITCH = 2;
     
-    private Date                   sampleDate = new Date();
-    private long                   sampleTimer_old = sampleDate.getTime() / 5000;
-    private long                   sampleTimer = -1;
+    private boolean				   needCapture = false;
+    private boolean                needClear = false;
+    private boolean                notStart = true;
+    private boolean                stitchDone = false;
     
-    BackgroundStitching            task;
-    private boolean                clear = false;
-    private boolean                postprocessing = false;
-    
-    float[]                        Acceleration = new float [3];
-	float[]                        Magnetic = new float [3];
-    private float[]                Rotation_init = new float [9];
-    private Mat                    Rotation_init_mat;
-    
-    private static SensorManager   sensorService;
-    private Sensor                 sensorAccelerometer;
-    private Sensor                 sensorMagneticField;
-    private int                    MinAccelerometerDelay;
-    private int                    MinMagneticFieldDelay;
-            
+    BackgroundStitching            task;                
     private int                    mViewMode;
     private Mat                    mRgba;
-    private ArrayList<Mat>         input_samples = new ArrayList<Mat>();
     private ArrayList<Mat>         processing_samples = new ArrayList<Mat>();
-    private Mat                    mIntermediateMat;
-    private Mat                    mGray;
+    private ArrayList<Long>        processing_addrs = new ArrayList<Long>();
+    Mat errorCode;
 
-    private MenuItem               mItemPreviewRgba;
-    private MenuItem               mItemPreviewGlobal;
-    private MenuItem               mItemPreviewPlayback;
-    private MenuItem 			   mItemPreviewSave;
+    
+    private MenuItem               mItemCamera;
+    private MenuItem               mItemGallery;
+    private MenuItem               mItemStitch;
+    private MenuItem 			   mItemClear;
+    private MenuItem               mItemCapture;
 
     private CameraBridgeViewBase   mOpenCvCameraView;
     
     private class BackgroundStitching extends AsyncTask<String, Void, String> {
         @Override
         protected String doInBackground(String... A) {
-        	while (true) {
-        		if (clear == true) {
-        			input_samples.clear();
-        			processing_samples.clear();
-        			clear = false;
-        			postprocessing = false;
-        			continue;
-        		}
-        		if (isCancelled()) {
-        			postprocessing = true;
-        			break;
-        		}
-	        	int size_i = input_samples.size();
-	        	int size_p = processing_samples.size();
-	        	if (size_i != size_p) {        		 
-	    			processing_samples.add(input_samples.get(size_p));
-	        		double[] errorCounter = new double [1];
-	        		errorCounter[0] = 0;
-	        		Mat errorCode = new Mat(1, 1, CvType.CV_64FC1);
-	        		errorCode.put(0, 0, errorCounter);
-	        		FindFeatures(processing_samples.get(0).getNativeObjAddr(), processing_samples.get(processing_samples.size() - 1).getNativeObjAddr(), errorCode.getNativeObjAddr());
-	        		errorCode.get(0, 0, errorCounter);
-	        		Log.i(Debug, "" + errorCounter[0]);
-		        	/*DescriptorExtractor OrbExtractor = DescriptorExtractor.create(DescriptorExtractor.ORB);
-					FeatureDetector OrbDetector = FeatureDetector.create(FeatureDetector.ORB);
-					DescriptorMatcher matcher = DescriptorMatcher.create(DescriptorMatcher.BRUTEFORCE_HAMMING);
-		    		MatOfKeyPoint keypoints1 = new MatOfKeyPoint();
-		    	    MatOfKeyPoint keypoints2 = new MatOfKeyPoint();
-		            Mat[] descriptors = new Mat[2];
-		            descriptors[0] = new Mat();
-		            descriptors[1] = new Mat();
-		            OrbDetector.detect(samples.get(0), keypoints1);
-		            OrbExtractor.compute(samples.get(0), keypoints1, descriptors[0]); 
-		            KeyPoint[] ArrayOfKeyPoints1 = keypoints1.toArray();
-		            OrbDetector.detect(A[0], keypoints2);
-		            OrbExtractor.compute(A[0], keypoints2, descriptors[1]);
-		            KeyPoint[] ArrayOfKeyPoints2 = keypoints2.toArray();
-		           
-		            ArrayList<MatOfDMatch> AllMatches = new ArrayList<MatOfDMatch>();
-		            AllMatches.add(new MatOfDMatch());
-		            AllMatches.add(new MatOfDMatch());
-		            matcher.knnMatch(descriptors[0], descriptors[1], AllMatches, 2);
-		            
-		            int length = AllMatches.size();
-		            
-		            ArrayList<Point> ArrayListOfPoints1 = new ArrayList<Point>();
-		            ArrayList<Point> ArrayListOfPoints2 = new ArrayList<Point>();
-		            for (int i = 0; i < length; i++) {
-		            	DMatch[] ArrayOfDMatch = AllMatches.get(i).toArray();
-		            	int index1 = ArrayOfDMatch[0].queryIdx;
-		            	float distance1 = ArrayOfDMatch[0].distance;
-		            	int index2 = ArrayOfDMatch[0].trainIdx;
-		            	float distance2 = ArrayOfDMatch[1].distance;
-		            	if (distance1 < 0.6 * distance2) {
-		            		ArrayListOfPoints1.add(ArrayOfKeyPoints1[index1].pt);
-		            		ArrayListOfPoints2.add(ArrayOfKeyPoints2[index2].pt);
-		            	}
-		            }
-		            if (ArrayListOfPoints1.size() >= 10) {	            
-			            Point [] ArrayOfPoints1 = new Point [ArrayListOfPoints1.size()];
-			            Point [] ArrayOfPoints2 = new Point [ArrayListOfPoints2.size()];
-			            ArrayListOfPoints1.toArray(ArrayOfPoints1);
-			            ArrayListOfPoints2.toArray(ArrayOfPoints2);
-			            Mat temp_image = new Mat(A[0].size(), CvType.CV_8UC4);
-			            Imgproc.cvtColor(samples.get(0), temp_image, Imgproc.COLOR_GRAY2RGBA, 4);
-			            for (int i = 0; i < ArrayOfPoints1.length; i++) {
-			            	Core.circle(temp_image, ArrayOfPoints1[i], 10, new Scalar(255, 255, 255, 255));                    	
-			            }
-			            Imgproc.cvtColor(temp_image, samples_circle.get(0), Imgproc.COLOR_RGBA2GRAY, 1);
-			            MatOfPoint2f MatOfpoints1 = new MatOfPoint2f(ArrayOfPoints1);
-			            MatOfPoint2f MatOfpoints2 = new MatOfPoint2f(ArrayOfPoints2);
-			            Mat HomographyMatrix = Calib3d.findHomography(MatOfpoints2, MatOfpoints1, Calib3d.RANSAC, 1);
-			            Mat input_transformed = new Mat(A[0].size(), CvType.CV_8UC1);
-			            Imgproc.warpPerspective(A[0], input_transformed, HomographyMatrix, A[0].size());                    
-			            samples.add(input_transformed.clone());
-			            samples_circle.add(input_transformed.clone());
-			            Imgproc.cvtColor(samples_circle.get(samples.size() - 1), temp_image, Imgproc.COLOR_GRAY2RGBA, 4);
-			            for (int i = 0; i < ArrayOfPoints2.length; i++) {                    	
-			            	Mat HomoPoint = new Mat(3, 1, CvType.CV_64FC1);
-			            	Mat TransHomoPoint = new Mat(3, 1, CvType.CV_64FC1);
-			            	HomoPoint.put(0, 0, (double)ArrayOfPoints2[i].x);
-			            	HomoPoint.put(1, 0, (double)ArrayOfPoints2[i].y);
-			            	HomoPoint.put(2, 0, 1.0);
-			            	Core.gemm(HomographyMatrix, HomoPoint, 1.0, Mat.zeros(3, 1, CvType.CV_64FC1), 0.0, TransHomoPoint);  
-			            	ArrayOfPoints2[i].x = TransHomoPoint.get(0, 0)[0] / TransHomoPoint.get(2, 0)[0];
-			            	ArrayOfPoints2[i].y = TransHomoPoint.get(1, 0)[0] / TransHomoPoint.get(2, 0)[0];                    	
-			            	Core.circle(temp_image, ArrayOfPoints2[i], 10, new Scalar(255, 255, 255, 255));                   	
-			            }
-			            Imgproc.cvtColor(temp_image, samples_circle.get(samples.size() - 1), Imgproc.COLOR_RGBA2GRAY, 1);
-		            }*/
-		        }
-        	}
-        	return "" + processing_samples.size();
+			double[] errorCounter = new double [9];
+    		FindFeatures(processing_addrs, errorCode.getNativeObjAddr());	   
+        	return "Done!";
         }
         
         @Override
-        protected void onPostExecute(String result) {
-        	//Log.i(Debug, "" + result);
+        protected void onPostExecute(String done) {
+        	notStart = true;
+        	stitchDone = true;
         }
     }
     
@@ -221,39 +121,16 @@ public class Tutorial2Activity extends Activity implements CvCameraViewListener2
         setContentView(R.layout.tutorial2_surface_view);
         mOpenCvCameraView = (CameraBridgeViewBase) findViewById(R.id.tutorial2_activity_surface_view);
         mOpenCvCameraView.setCvCameraViewListener(this);
-        
-        sensorService = (SensorManager) getSystemService(Context.SENSOR_SERVICE);
-        sensorAccelerometer = sensorService.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
-        MinAccelerometerDelay = sensorAccelerometer.getMinDelay ();
-        if (sensorAccelerometer != null) {
-        	sensorService.registerListener(sampleListener, sensorAccelerometer, MinAccelerometerDelay);
-            Log.i("Tag", "Registered for Accelerometer Sensor");
-        } 
-        else {
-            Log.e("Tag", "Acceleromter Sensor not found");
-            finish();
-        }
-        sensorMagneticField = sensorService.getDefaultSensor(Sensor.TYPE_MAGNETIC_FIELD);
-        MinMagneticFieldDelay = sensorMagneticField.getMinDelay();
-        if (sensorMagneticField != null) {
-        	sensorService.registerListener(sampleListener, sensorMagneticField, MinMagneticFieldDelay);
-            Log.i("Tag", "Registered for Magnetic Field Sensor");
-        } 
-        else {
-            Log.e("Tag", "Magnetic Field Sensor not found");
-            finish();
-        }
-        task = new BackgroundStitching();
-	    task.execute(new String[] { "start" });
     }
 
     @Override
     public boolean onCreateOptionsMenu(Menu menu) {
         Log.i(TAG, "called onCreateOptionsMenu");
-        mItemPreviewRgba = menu.add("Rgba");
-        mItemPreviewGlobal = menu.add("Global");
-        mItemPreviewPlayback = menu.add("Playback");
-        mItemPreviewSave = menu.add("Save");
+        mItemCamera = menu.add("Camera");
+        mItemGallery = menu.add("Gallery");
+        mItemStitch  = menu.add("Stitch");
+        mItemClear = menu.add("Clear");
+        mItemCapture = menu.add("Capture");
         return true;
     }
 
@@ -263,8 +140,6 @@ public class Tutorial2Activity extends Activity implements CvCameraViewListener2
         super.onPause();
         if (mOpenCvCameraView != null)
             mOpenCvCameraView.disableView();
-        sensorService.unregisterListener(sampleListener);
-        task.cancel(true);
     }
 
     @Override
@@ -272,110 +147,121 @@ public class Tutorial2Activity extends Activity implements CvCameraViewListener2
     {
         super.onResume();
         OpenCVLoader.initAsync(OpenCVLoader.OPENCV_VERSION_2_4_3, this, mLoaderCallback);
-        sensorService.registerListener(sampleListener, sensorAccelerometer, MinAccelerometerDelay);
-        sensorService.registerListener(sampleListener, sensorMagneticField, MinMagneticFieldDelay);
-        task = new BackgroundStitching();
-	    task.execute(new String[] { "start" });
     }
 
     public void onDestroy() {
         super.onDestroy();
         if (mOpenCvCameraView != null)
             mOpenCvCameraView.disableView();
-        sensorService.unregisterListener(sampleListener);
-        task.cancel(true);
     }
 
     public void onCameraViewStarted(int width, int height) {
         mRgba = new Mat(height, width, CvType.CV_8UC4);
-        mIntermediateMat = new Mat(height, width, CvType.CV_8UC4);
-        mGray = new Mat(height, width, CvType.CV_8UC1);
+        errorCode = new Mat(3, 3, CvType.CV_64FC1);
     }
 
     public void onCameraViewStopped() {
         mRgba.release();
-        mGray.release();
-        mIntermediateMat.release();
     }
 
     public Mat onCameraFrame(CvCameraViewFrame inputFrame) {
         final int viewMode = mViewMode;
         switch (viewMode) {
-        case RGBA:
+        case CAMERA:
         	mRgba = inputFrame.rgba();
-        	clear = true;
+        	Core.putText(mRgba, "Image captured: " + processing_samples.size(),  new Point(50, 50), Core.FONT_HERSHEY_SIMPLEX, 1.0, new Scalar(0, 255, 0, 255));
+        	if (needClear == true) {
+        		processing_samples.clear();
+        		needClear = false;
+        		stitchDone = false;
+        	} else if (needCapture == true) {
+        		if (stitchDone == false) {
+	        		/*if (processing_samples.size() < 7) {
+	        			File root = Environment.getExternalStorageDirectory();        		
+	                	File file = new File(root, "DCIM/Camera/" + (processing_samples.size() + 1) + ".jpg");
+	                    processing_samples.add(Highgui.imread(file.getAbsolutePath()));
+	                    processing_addrs.add(Long.valueOf(processing_samples.get(processing_samples.size() - 1).getNativeObjAddr()));
+	        		}*/
+        			Mat mRgb = new Mat(mRgba.size(), CvType.CV_8UC3);
+        			Imgproc.cvtColor(mRgba, mRgb, Imgproc.COLOR_RGBA2RGB, 3);
+        			processing_samples.add(mRgb);
+        			processing_addrs.add(Long.valueOf(processing_samples.get(processing_samples.size() - 1).getNativeObjAddr()));
+        		}
+        		needCapture = false;
+        	}
         	break;
-        case GLOBAL:
-        	mGray = inputFrame.gray();
-        	Imgproc.cvtColor(inputFrame.gray(), mRgba, Imgproc.COLOR_GRAY2RGBA, 4);
-        	/*if (stable == true && input_samples.size() == 0) {
-        		samples.add(mGray.clone());
-        		samples_circle.add(mGray.clone());
-        	}*/            
-            break;
-        case PLAY_BACK:
-        	/*if (samples.size() > 0) {
-        		Date Playback = new Date();
-        		long PlaybackTimer = Playback.getTime() / 1000;
-        	    mGray = samples_circle.get((int)(PlaybackTimer % samples.size()));
+        case GALLERY:
+        	if (needClear == true) {
+        		processing_samples.clear();
+    			needClear = false;
+    			stitchDone = false;
+    			mViewMode = CAMERA;
         	}
-        	else {*/
-        		mGray = inputFrame.gray();
-        	//}
-        	Imgproc.cvtColor(mGray, mRgba, Imgproc.COLOR_GRAY2RGBA, 4);
-            break;
-        case SAVE:
-        	mGray = inputFrame.gray();
-        	Imgproc.cvtColor(inputFrame.gray(), mRgba, Imgproc.COLOR_GRAY2RGBA, 4);
-        	sampleDate = new Date();
-        	sampleTimer = sampleDate.getTime() / 5000;
-        	if (clear == false && sampleTimer > sampleTimer_old) {
-        		sampleTimer_old = sampleTimer;
-        		input_samples.add(mGray.clone());
+        	if (processing_samples.size() > 0) {
+        		long sampleTime = new Date().getTime() / 1000;
+        		Mat sampleImage = processing_samples.get((int)sampleTime % processing_samples.size()); 
+        		Imgproc.resize(sampleImage, mRgba, mRgba.size());
+        		Core.putText(mRgba, "Image captured: " + (int)sampleTime % processing_samples.size(),  new Point(50, 50), Core.FONT_HERSHEY_SIMPLEX, 1.0, new Scalar(0, 255, 0, 255));
         	}
+        	else {
+        		mRgba = inputFrame.rgba();
+        	    Core.putText(mRgba, "No captured image! ",  new Point(mRgba.cols() / 2 - 800, mRgba.rows() / 2), Core.FONT_HERSHEY_SIMPLEX, 5.0, new Scalar(255, 128, 0, 255), 3);
+        	}
+        	break;
+        case STITCH:
+        	double[] errorCounter = new double [9];	   
+		    errorCode.get(0, 0, errorCounter);
+		    Log.i(Debug, "percentage:" + errorCounter[0]);
+        	if (stitchDone == true) {
+        		File root = Environment.getExternalStorageDirectory();        		
+            	File file = new File(root, "DCIM/Camera/result.jpg");
+        		Imgproc.resize(Highgui.imread(file.getAbsolutePath()), mRgba, mRgba.size());
+        	}
+        	else {
+        		mRgba = inputFrame.rgba();
+        		Core.putText(mRgba, "" + errorCounter[0],  new Point(mRgba.cols() / 2 - 200, mRgba.rows() / 2), Core.FONT_HERSHEY_SIMPLEX, 5.0, new Scalar(255, 255, 0, 255)); 
+        	}
+        	      	
+        	if (needClear == true) {
+        		if (notStart == false) {
+        			task.cancel(true);
+        		}
+        		processing_samples.clear();
+        		notStart = true;
+    			needClear = false;
+    			stitchDone = false;
+    			mViewMode = CAMERA;
+        	}
+        	else {
+	        	if (notStart == true && stitchDone == false && processing_samples.size() >= 2) {
+	        		notStart = false;
+	        		task = new BackgroundStitching();
+	        		task.execute(new String[] { "start" });
+	        	}
+        	}
+        	break;
         }
         return mRgba;
     }
 
     public boolean onOptionsItemSelected(MenuItem item) {
         Log.i(TAG, "called onOptionsItemSelected; selected item: " + item);
-        if (item == mItemPreviewRgba) {
-            mViewMode = RGBA;
-        }  else if (item == mItemPreviewGlobal) {
-            mViewMode = GLOBAL;
-        }  else if (item == mItemPreviewPlayback) {
-            mViewMode = PLAY_BACK;
-        }  else if (item == mItemPreviewSave) {
-        	mViewMode = SAVE; 
+        if (item == mItemCamera) {
+        	if (notStart == true) {
+        		mViewMode = CAMERA;
+        	}
+        } else if (item == mItemGallery) {
+        	if (notStart == true) {
+        		mViewMode = GALLERY;
+        	}
+        } else if (item == mItemStitch) {
+            mViewMode = STITCH;
+        } else if (item == mItemClear) {
+        	needClear = true;
+        } else if (item == mItemCapture) {
+        	needCapture = true;
         }
-
         return true;
     }
-    
-    private SensorEventListener sampleListener = new SensorEventListener () { 
-      
-        @Override
-        public final void onAccuracyChanged(Sensor sensor, int accuracy) {
-        // Do something here if sensor accuracy changes.
-        }
-      
-        @Override
-        public final void onSensorChanged(SensorEvent event) {
-        	if (event.sensor.getType() == Sensor.TYPE_ACCELEROMETER) {
-        		Acceleration[0] = event.values[0];
-        		Acceleration[1] = event.values[1];
-        		Acceleration[2] = event.values[2];
-        	}
-        	else {
-        		if (event.sensor.getType() == Sensor.TYPE_MAGNETIC_FIELD) {
-        			Magnetic[0] = event.values[0];
-        			Magnetic[1] = event.values[1];
-        			Magnetic[2] = event.values[2];
-        		}
-            }
-        }
-    };
-    
-
-    public native void FindFeatures(long FirstAddr, long SecondAddr, long errorCodeAddr);
+    public native void FindFeatures(ArrayList<Long> processingAddr, long errorCodeAddr);
 }

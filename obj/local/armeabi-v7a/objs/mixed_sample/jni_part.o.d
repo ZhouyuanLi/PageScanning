@@ -5,7 +5,6 @@ obj/local/armeabi-v7a/objs/mixed_sample/jni_part.o: jni/jni_part.cpp \
  C:/old/android/android-ndk-r9d/platforms/android-8/arch-arm/usr/include/android/api-level.h \
  C:/old/android/android-ndk-r9d/sources/cxx-stl/gnu-libstdc++/4.6/include/iostream \
  C:/old/android/android-ndk-r9d/sources/cxx-stl/gnu-libstdc++/4.6/include/fstream \
- C:/old/android/android-ndk-r9d/sources/cxx-stl/gnu-libstdc++/4.6/include/vector \
  ../../sdk/native/jni/include/opencv2/opencv_modules.hpp \
  ../../sdk/native/jni/include/opencv2/highgui/highgui.hpp \
  ../../sdk/native/jni/include/opencv2/core/core.hpp \
@@ -22,6 +21,7 @@ obj/local/armeabi-v7a/objs/mixed_sample/jni_part.o: jni/jni_part.cpp \
  C:/old/android/android-ndk-r9d/sources/cxx-stl/gnu-libstdc++/4.6/include/cstddef \
  C:/old/android/android-ndk-r9d/sources/cxx-stl/gnu-libstdc++/4.6/include/complex \
  C:/old/android/android-ndk-r9d/sources/cxx-stl/gnu-libstdc++/4.6/include/map \
+ C:/old/android/android-ndk-r9d/sources/cxx-stl/gnu-libstdc++/4.6/include/vector \
  ../../sdk/native/jni/include/opencv2/core/operations.hpp \
  C:/old/android/android-ndk-r9d/sources/cxx-stl/gnu-libstdc++/4.6/include/limits \
  ../../sdk/native/jni/include/opencv2/core/mat.hpp \
@@ -67,8 +67,6 @@ C:/old/android/android-ndk-r9d/sources/cxx-stl/gnu-libstdc++/4.6/include/iostrea
 
 C:/old/android/android-ndk-r9d/sources/cxx-stl/gnu-libstdc++/4.6/include/fstream:
 
-C:/old/android/android-ndk-r9d/sources/cxx-stl/gnu-libstdc++/4.6/include/vector:
-
 ../../sdk/native/jni/include/opencv2/opencv_modules.hpp:
 
 ../../sdk/native/jni/include/opencv2/highgui/highgui.hpp:
@@ -100,6 +98,8 @@ C:/old/android/android-ndk-r9d/sources/cxx-stl/gnu-libstdc++/4.6/include/cstddef
 C:/old/android/android-ndk-r9d/sources/cxx-stl/gnu-libstdc++/4.6/include/complex:
 
 C:/old/android/android-ndk-r9d/sources/cxx-stl/gnu-libstdc++/4.6/include/map:
+
+C:/old/android/android-ndk-r9d/sources/cxx-stl/gnu-libstdc++/4.6/include/vector:
 
 ../../sdk/native/jni/include/opencv2/core/operations.hpp:
 
