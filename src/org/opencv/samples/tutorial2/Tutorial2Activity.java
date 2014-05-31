@@ -76,7 +76,9 @@ public class Tutorial2Activity extends Activity implements CvCameraViewListener2
     private class BackgroundStitching extends AsyncTask<String, Void, String> {
         @Override
         protected String doInBackground(String... A) {
-			double[] errorCounter = new double [9];
+			byte[] errorCounter = new byte [1];
+			errorCounter[0] = 5;
+			errorCode.put(0, 0, errorCounter);
     		FindFeatures(processing_addrs, errorCode.getNativeObjAddr());	   
         	return "Done!";
         }
@@ -163,7 +165,10 @@ public class Tutorial2Activity extends Activity implements CvCameraViewListener2
         for (int i = 0; i < height * width * 4; i++) {
         	black[i] = 0;
         }
-        errorCode = new Mat(3, 3, CvType.CV_64FC1);
+        errorCode = new Mat(1, 1, CvType.CV_8UC1);
+        byte[] errorCounter = new byte [1];
+        errorCounter[0] = 0;
+        errorCode.put(0, 0, errorCounter);
     }
 
     public void onCameraViewStopped() {
@@ -177,8 +182,13 @@ public class Tutorial2Activity extends Activity implements CvCameraViewListener2
         	mRgba = inputFrame.rgba();        	
         	if (needClear == true) {
         		processing_samples.clear();
+        		processing_addrs.clear();
+        		result = null;
         		needClear = false;
         		stitchDone = false;
+        		byte [] errorCounter = new byte[1];
+        		errorCounter[0] = 0;
+    			errorCode.put(0, 0, errorCounter);
         	} else {
         		if (needCapture == true) {
 	        		if (stitchDone == false) {
@@ -199,10 +209,16 @@ public class Tutorial2Activity extends Activity implements CvCameraViewListener2
         	}
         	break;
         case GALLERY:
+        	mRgba = inputFrame.rgba();
         	if (needClear == true) {
         		processing_samples.clear();
+        		processing_addrs.clear();
+        		result = null;
     			needClear = false;
     			stitchDone = false;
+    			byte [] errorCounter = new byte[1];
+    			errorCounter[0] = 0;
+    			errorCode.put(0, 0, errorCounter);
     			mViewMode = CAMERA;
         	}
         	if (processing_samples.size() > 0) {
@@ -213,49 +229,72 @@ public class Tutorial2Activity extends Activity implements CvCameraViewListener2
         	}
         	else {
         		mRgba.put(0, 0, black);
-        	    Core.putText(mRgba, "No captured image! ",  new Point(mRgba.cols() / 2 - 800, mRgba.rows() / 2), Core.FONT_HERSHEY_SIMPLEX, 5.0, new Scalar(255, 128, 0, 255), 5);
+        	    Core.putText(mRgba, "No captured image! ",  new Point(mRgba.cols() / 2 - 800, mRgba.rows() / 2), Core.FONT_HERSHEY_SIMPLEX, 5.0, new Scalar(255, 128, 0, 255), 3);
         	}
         	break;
         case STITCH:
-        	double[] errorCounter = new double [9];	   
-		    errorCode.get(0, 0, errorCounter);
-		    Log.i(Debug, "percentage:" + errorCounter[0]);
+        	mRgba = inputFrame.rgba();
+        	byte[] errorCounter = new byte [1];
+        	errorCode.get(0, 0, errorCounter);
+        	if (needClear == true) {
+        		if ((notStart == false || stitchDone == true) &&  errorCounter[0] > 0) {
+        			task.cancel(true);
+        		}
+        		processing_samples.clear();
+        		processing_samples.clear();
+        		result = null;
+        		notStart = true;
+    			needClear = false;
+    			stitchDone = false;
+    			errorCounter[0] = 0;
+    			errorCode.put(0, 0, errorCounter);
+    			mViewMode = CAMERA;
+    			break;
+        	}
+        	else {
+	        	if (notStart == true && stitchDone == false) {
+	        		if (processing_samples.size() >= 2) {
+	        			notStart = false;
+	        			task = new BackgroundStitching();
+	        			task.execute(new String[] { "start" });
+	        		}
+	        		else {
+	        			stitchDone = true;
+	        			notStart = true;
+	        			errorCounter[0] = 0;
+	                	errorCode.put(0, 0, errorCounter);
+	        		}
+	        	}
+        	}	   
+        	errorCode.get(0, 0, errorCounter);
         	if (stitchDone == true) {
-        		if (result == null) {
-        			result = new Mat(mRgba.size(), CvType.CV_8UC4);
-        			File root = Environment.getExternalStorageDirectory();        		
-        			File file = new File(root, "DCIM/Camera/result.jpg");
-        			Imgproc.resize(Highgui.imread(file.getAbsolutePath()), result, result.size());
+        		Log.i(Debug, "" + errorCounter[0]);
+        		if (errorCounter[0] == 100) {
+        			if (result == null) {
+        				result = new Mat(mRgba.size(), CvType.CV_8UC4);
+        				File root = Environment.getExternalStorageDirectory();        		
+        				File file = new File(root, "DCIM/Camera/result.jpg");
+        				Imgproc.resize(Highgui.imread(file.getAbsolutePath()), result, result.size());
+        			}
+        		}
+        		else {
+        			if (result == null) {
+        				result = new Mat(mRgba.size(), CvType.CV_8UC4);
+        			}
+        			result.put(0, 0, black);
+        			Core.putText(result, "Can't stitch! ",  new Point(result.cols() / 2 - 400, result.rows() / 2), Core.FONT_HERSHEY_SIMPLEX, 5.0, new Scalar(255, 0, 0, 255), 3);
         		}
         		mRgba = result;        		
         	}
         	else {
         		mRgba.put(0, 0, black);
-        		if (errorCounter[0] == 0) {
-        			Core.putText(mRgba, "" + errorCounter[0] + "%",  new Point(mRgba.cols() / 2 - 400, mRgba.rows() / 2), Core.FONT_HERSHEY_SCRIPT_COMPLEX, 10.0, new Scalar(255, 255, 0, 255), 5);
+        		if (errorCounter[0] < 10) {
+        			Core.putText(mRgba, "" + (int)errorCounter[0] + "%",  new Point(mRgba.cols() / 2 - 200, mRgba.rows() / 2), Core.FONT_HERSHEY_SCRIPT_COMPLEX, 10.0, new Scalar(255, 255, 0, 255), 5);
         		}
         		else {
-        			Core.putText(mRgba, "" + errorCounter[0] + "%",  new Point(mRgba.cols() / 2 - 600, mRgba.rows() / 2), Core.FONT_HERSHEY_SCRIPT_COMPLEX, 10.0, new Scalar(255, 255, 0, 255), 5);
+        			Core.putText(mRgba, "" + (int)errorCounter[0] + "%",  new Point(mRgba.cols() / 2 - 400, mRgba.rows() / 2), Core.FONT_HERSHEY_SCRIPT_COMPLEX, 10.0, new Scalar(255, 255, 0, 255), 5);
         		}
-        	}
-        	      	
-        	if (needClear == true) {
-        		if (notStart == false) {
-        			task.cancel(true);
-        		}
-        		processing_samples.clear();
-        		notStart = true;
-    			needClear = false;
-    			stitchDone = false;
-    			mViewMode = CAMERA;
-        	}
-        	else {
-	        	if (notStart == true && stitchDone == false && processing_samples.size() >= 2) {
-	        		notStart = false;
-	        		task = new BackgroundStitching();
-	        		task.execute(new String[] { "start" });
-	        	}
-        	}
+        	}        	
         	break;
         }
         return mRgba;

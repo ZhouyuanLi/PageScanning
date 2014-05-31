@@ -131,7 +131,7 @@ JNIEXPORT void JNICALL Java_org_opencv_samples_tutorial2_Tutorial2Activity_FindF
 
     Ptr<FeaturesFinder> finder;
     finder = new OrbFeaturesFinder();
-    errorCode.at<double>(0, 0) = 0;
+    errorCode.at<uchar>(0, 0) = 0;
     Mat full_img, img;
     for (int i = 0; i < NumElts; ++i)
     {
@@ -171,7 +171,7 @@ JNIEXPORT void JNICALL Java_org_opencv_samples_tutorial2_Tutorial2Activity_FindF
     finder->collectGarbage();
     full_img.release();
     img.release();
-    errorCode.at<double>(0, 0) = 10;
+    errorCode.at<uchar>(0, 0) = 10;
 
 
     ImageFeatures& featuresi = features[0];
@@ -204,7 +204,7 @@ JNIEXPORT void JNICALL Java_org_opencv_samples_tutorial2_Tutorial2Activity_FindF
     if (NumElts < 2) {
     	return;
     }
-    errorCode.at<double>(0, 0) = 20;
+    errorCode.at<uchar>(0, 0) = 20;
 
     HomographyBasedEstimator estimator;
     vector<CameraParams> cameras;
@@ -217,7 +217,7 @@ JNIEXPORT void JNICALL Java_org_opencv_samples_tutorial2_Tutorial2Activity_FindF
         camerasi.R.convertTo(R, CV_32F);
         camerasi.R = R;
     }
-    errorCode.at<double>(0, 0) = 30;
+    errorCode.at<uchar>(0, 0) = 30;
 
     Ptr<detail::BundleAdjusterBase> adjuster;
     if (ba_cost_func == "reproj") adjuster = new detail::BundleAdjusterReproj();
@@ -241,7 +241,7 @@ JNIEXPORT void JNICALL Java_org_opencv_samples_tutorial2_Tutorial2Activity_FindF
         CameraParams& camerasi = cameras[i];
         focals.push_back(camerasi.focal);
     }
-    errorCode.at<double>(0, 0) = 70;
+    errorCode.at<uchar>(0, 0) = 70;
 
     sort(focals.begin(), focals.end());
     float warped_image_scale;
@@ -263,7 +263,7 @@ JNIEXPORT void JNICALL Java_org_opencv_samples_tutorial2_Tutorial2Activity_FindF
             camerasi.R = rmats[i];
         }
     }
-    errorCode.at<double>(0, 0) = 75;
+    errorCode.at<uchar>(0, 0) = 75;
 
     vector<Point> corners(NumElts);
     vector<Mat> masks_warped(NumElts);
@@ -313,7 +313,7 @@ JNIEXPORT void JNICALL Java_org_opencv_samples_tutorial2_Tutorial2Activity_FindF
 
     Ptr<ExposureCompensator> compensator = ExposureCompensator::createDefault(expos_comp_type);
     compensator->feed(corners, images_warped, masks_warped);
-    errorCode.at<double>(0, 0) = 80;
+    errorCode.at<uchar>(0, 0) = 80;
 
     Ptr<SeamFinder> seam_finder;
     if (seam_find_type == "no")
@@ -343,7 +343,7 @@ JNIEXPORT void JNICALL Java_org_opencv_samples_tutorial2_Tutorial2Activity_FindF
     Mat dilated_mask, seam_mask, mask, mask_warped;
     Ptr<Blender> blender;
     double compose_work_aspect = 1;
-    errorCode.at<double>(0, 0) = 85;
+    errorCode.at<uchar>(0, 0) = 85;
 
     for (int img_idx = 0; img_idx < NumElts; ++img_idx)
     {
@@ -445,11 +445,11 @@ JNIEXPORT void JNICALL Java_org_opencv_samples_tutorial2_Tutorial2Activity_FindF
         blender->feed(img_warped_s, mask_warped, cornersk);
     }
 
-    errorCode.at<double>(0, 0) = 90;
+    errorCode.at<uchar>(0, 0) = 90;
 
     Mat result, result_mask;
     blender->blend(result, result_mask);
     imwrite("/storage/emulated/0/DCIM/Camera/result.jpg", result);
-    errorCode.at<double>(0, 0) = 100;
+    errorCode.at<uchar>(0, 0) = 100;
 }
 }
