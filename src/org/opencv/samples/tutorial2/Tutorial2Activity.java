@@ -58,6 +58,8 @@ public class Tutorial2Activity extends Activity implements CvCameraViewListener2
     BackgroundStitching            task;                
     private int                    mViewMode;
     private Mat                    mRgba;
+    private Mat                    result;
+    private byte[]                 black;
     private ArrayList<Mat>         processing_samples = new ArrayList<Mat>();
     private ArrayList<Long>        processing_addrs = new ArrayList<Long>();
     Mat errorCode;
@@ -157,6 +159,10 @@ public class Tutorial2Activity extends Activity implements CvCameraViewListener2
 
     public void onCameraViewStarted(int width, int height) {
         mRgba = new Mat(height, width, CvType.CV_8UC4);
+        black = new byte [height * width * 4];
+        for (int i = 0; i < height * width * 4; i++) {
+        	black[i] = 0;
+        }
         errorCode = new Mat(3, 3, CvType.CV_64FC1);
     }
 
@@ -168,26 +174,28 @@ public class Tutorial2Activity extends Activity implements CvCameraViewListener2
         final int viewMode = mViewMode;
         switch (viewMode) {
         case CAMERA:
-        	mRgba = inputFrame.rgba();
-        	Core.putText(mRgba, "Image captured: " + processing_samples.size(),  new Point(50, 50), Core.FONT_HERSHEY_SIMPLEX, 1.0, new Scalar(0, 255, 0, 255));
+        	mRgba = inputFrame.rgba();        	
         	if (needClear == true) {
         		processing_samples.clear();
         		needClear = false;
         		stitchDone = false;
-        	} else if (needCapture == true) {
-        		if (stitchDone == false) {
-	        		/*if (processing_samples.size() < 7) {
-	        			File root = Environment.getExternalStorageDirectory();        		
-	                	File file = new File(root, "DCIM/Camera/" + (processing_samples.size() + 1) + ".jpg");
-	                    processing_samples.add(Highgui.imread(file.getAbsolutePath()));
-	                    processing_addrs.add(Long.valueOf(processing_samples.get(processing_samples.size() - 1).getNativeObjAddr()));
-	        		}*/
-        			Mat mRgb = new Mat(mRgba.size(), CvType.CV_8UC3);
-        			Imgproc.cvtColor(mRgba, mRgb, Imgproc.COLOR_RGBA2RGB, 3);
-        			processing_samples.add(mRgb);
-        			processing_addrs.add(Long.valueOf(processing_samples.get(processing_samples.size() - 1).getNativeObjAddr()));
+        	} else {
+        		if (needCapture == true) {
+	        		if (stitchDone == false) {
+		        		/*if (processing_samples.size() < 7) {
+		        			File root = Environment.getExternalStorageDirectory();        		
+		                	File file = new File(root, "DCIM/Camera/" + (processing_samples.size() + 1) + ".jpg");
+		                    processing_samples.add(Highgui.imread(file.getAbsolutePath()));
+		                    processing_addrs.add(Long.valueOf(processing_samples.get(processing_samples.size() - 1).getNativeObjAddr()));
+		        		}*/
+	        			Mat mRgb = new Mat(mRgba.size(), CvType.CV_8UC3);
+	        			Imgproc.cvtColor(mRgba, mRgb, Imgproc.COLOR_RGBA2RGB, 3);
+	        			processing_samples.add(mRgb);
+	        			processing_addrs.add(Long.valueOf(processing_samples.get(processing_samples.size() - 1).getNativeObjAddr()));
+	        		}
+	        		needCapture = false;
         		}
-        		needCapture = false;
+        		Core.putText(mRgba, "Image captured: " + processing_samples.size(),  new Point(100, 100), Core.FONT_HERSHEY_SIMPLEX, 3.0, new Scalar(0, 255, 0, 255), 5);
         	}
         	break;
         case GALLERY:
@@ -201,11 +209,11 @@ public class Tutorial2Activity extends Activity implements CvCameraViewListener2
         		long sampleTime = new Date().getTime() / 1000;
         		Mat sampleImage = processing_samples.get((int)sampleTime % processing_samples.size()); 
         		Imgproc.resize(sampleImage, mRgba, mRgba.size());
-        		Core.putText(mRgba, "Image captured: " + (int)sampleTime % processing_samples.size(),  new Point(50, 50), Core.FONT_HERSHEY_SIMPLEX, 1.0, new Scalar(0, 255, 0, 255));
+        		Core.putText(mRgba, "Image captured: " + (int)sampleTime % processing_samples.size(),  new Point(100, 100), Core.FONT_HERSHEY_SIMPLEX, 3.0, new Scalar(0, 255, 0, 255), 5);
         	}
         	else {
-        		mRgba = inputFrame.rgba();
-        	    Core.putText(mRgba, "No captured image! ",  new Point(mRgba.cols() / 2 - 800, mRgba.rows() / 2), Core.FONT_HERSHEY_SIMPLEX, 5.0, new Scalar(255, 128, 0, 255), 3);
+        		mRgba.put(0, 0, black);
+        	    Core.putText(mRgba, "No captured image! ",  new Point(mRgba.cols() / 2 - 800, mRgba.rows() / 2), Core.FONT_HERSHEY_SIMPLEX, 5.0, new Scalar(255, 128, 0, 255), 5);
         	}
         	break;
         case STITCH:
@@ -213,13 +221,22 @@ public class Tutorial2Activity extends Activity implements CvCameraViewListener2
 		    errorCode.get(0, 0, errorCounter);
 		    Log.i(Debug, "percentage:" + errorCounter[0]);
         	if (stitchDone == true) {
-        		File root = Environment.getExternalStorageDirectory();        		
-            	File file = new File(root, "DCIM/Camera/result.jpg");
-        		Imgproc.resize(Highgui.imread(file.getAbsolutePath()), mRgba, mRgba.size());
+        		if (result == null) {
+        			result = new Mat(mRgba.size(), CvType.CV_8UC4);
+        			File root = Environment.getExternalStorageDirectory();        		
+        			File file = new File(root, "DCIM/Camera/result.jpg");
+        			Imgproc.resize(Highgui.imread(file.getAbsolutePath()), result, result.size());
+        		}
+        		mRgba = result;        		
         	}
         	else {
-        		mRgba = inputFrame.rgba();
-        		Core.putText(mRgba, "" + errorCounter[0],  new Point(mRgba.cols() / 2 - 200, mRgba.rows() / 2), Core.FONT_HERSHEY_SIMPLEX, 5.0, new Scalar(255, 255, 0, 255)); 
+        		mRgba.put(0, 0, black);
+        		if (errorCounter[0] == 0) {
+        			Core.putText(mRgba, "" + errorCounter[0] + "%",  new Point(mRgba.cols() / 2 - 400, mRgba.rows() / 2), Core.FONT_HERSHEY_SCRIPT_COMPLEX, 10.0, new Scalar(255, 255, 0, 255), 5);
+        		}
+        		else {
+        			Core.putText(mRgba, "" + errorCounter[0] + "%",  new Point(mRgba.cols() / 2 - 600, mRgba.rows() / 2), Core.FONT_HERSHEY_SCRIPT_COMPLEX, 10.0, new Scalar(255, 255, 0, 255), 5);
+        		}
         	}
         	      	
         	if (needClear == true) {

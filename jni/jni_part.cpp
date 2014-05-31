@@ -241,7 +241,7 @@ JNIEXPORT void JNICALL Java_org_opencv_samples_tutorial2_Tutorial2Activity_FindF
         CameraParams& camerasi = cameras[i];
         focals.push_back(camerasi.focal);
     }
-    errorCode.at<double>(0, 0) = 90;
+    errorCode.at<double>(0, 0) = 70;
 
     sort(focals.begin(), focals.end());
     float warped_image_scale;
@@ -263,7 +263,7 @@ JNIEXPORT void JNICALL Java_org_opencv_samples_tutorial2_Tutorial2Activity_FindF
             camerasi.R = rmats[i];
         }
     }
-    errorCode.at<double>(0, 0) = 90;
+    errorCode.at<double>(0, 0) = 75;
 
     vector<Point> corners(NumElts);
     vector<Mat> masks_warped(NumElts);
@@ -313,7 +313,7 @@ JNIEXPORT void JNICALL Java_org_opencv_samples_tutorial2_Tutorial2Activity_FindF
 
     Ptr<ExposureCompensator> compensator = ExposureCompensator::createDefault(expos_comp_type);
     compensator->feed(corners, images_warped, masks_warped);
-    errorCode.at<double>(0, 0) = 95;
+    errorCode.at<double>(0, 0) = 80;
 
     Ptr<SeamFinder> seam_finder;
     if (seam_find_type == "no")
@@ -343,7 +343,7 @@ JNIEXPORT void JNICALL Java_org_opencv_samples_tutorial2_Tutorial2Activity_FindF
     Mat dilated_mask, seam_mask, mask, mask_warped;
     Ptr<Blender> blender;
     double compose_work_aspect = 1;
-    errorCode.at<double>(0, 0) = 96;
+    errorCode.at<double>(0, 0) = 85;
 
     for (int img_idx = 0; img_idx < NumElts; ++img_idx)
     {
@@ -444,6 +444,8 @@ JNIEXPORT void JNICALL Java_org_opencv_samples_tutorial2_Tutorial2Activity_FindF
         // Blend the current image
         blender->feed(img_warped_s, mask_warped, cornersk);
     }
+
+    errorCode.at<double>(0, 0) = 90;
 
     Mat result, result_mask;
     blender->blend(result, result_mask);
