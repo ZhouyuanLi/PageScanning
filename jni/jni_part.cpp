@@ -20,7 +20,7 @@ using namespace cv;
 using namespace cv::detail;
 
 extern "C" {
-JNIEXPORT void JNICALL Java_org_opencv_samples_tutorial2_Tutorial2Activity_FindFeatures(JNIEnv* env, jobject thisObj, jobject processAddr, jlong errorCodeAddr);
+JNIEXPORT void JNICALL Java_org_opencv_samples_pagescanning_pageScanningActivity_FindFeatures(JNIEnv* env, jobject thisObj, jobject processAddr, jlong errorCodeAddr);
 
 static void printUsage()
 {
@@ -97,12 +97,12 @@ std::string save_graph_to;
 string warp_type = "plane";
 int expos_comp_type = ExposureCompensator::GAIN_BLOCKS;
 float match_conf = 0.3f;
-string seam_find_type = "no";// "gc_color";
+string seam_find_type = "dp_color";
 int blend_type = Blender::MULTI_BAND;
 float blend_strength = 5;
 string result_name = "result.jpg";
 
-JNIEXPORT void JNICALL Java_org_opencv_samples_tutorial2_Tutorial2Activity_FindFeatures(JNIEnv* env, jobject thisObj, jobject processAddr, jlong errorCodeAddr)
+JNIEXPORT void JNICALL Java_org_opencv_samples_pagescanning_pageScanningActivity_FindFeatures(JNIEnv* env, jobject thisObj, jobject processAddr, jlong errorCodeAddr)
 {
 	jclass ArrayList_class = env->FindClass("java/util/ArrayList");
 	jclass Long_class = env->FindClass("java/lang/Long");
@@ -176,7 +176,6 @@ JNIEXPORT void JNICALL Java_org_opencv_samples_tutorial2_Tutorial2Activity_FindF
 
     ImageFeatures& featuresi = features[0];
 
-    //test with size 7
     vector<MatchesInfo> pairwise_matches;
     BestOf2NearestMatcher matcher(try_gpu, match_conf);
     matcher(features, pairwise_matches);
@@ -449,7 +448,11 @@ JNIEXPORT void JNICALL Java_org_opencv_samples_tutorial2_Tutorial2Activity_FindF
 
     Mat result, result_mask;
     blender->blend(result, result_mask);
-    imwrite("/storage/emulated/0/DCIM/Camera/result.jpg", result);
+    imwrite("/storage/emulated/0/DCIM/result.jpg", result);
+    result.release();
+    result = imread("/storage/emulated/0/DCIM/result.jpg");
+    cvtColor(result, result, CV_RGB2BGR);
+    imwrite("/storage/emulated/0/DCIM/result.jpg", result);
     errorCode.at<uchar>(0, 0) = 100;
 }
 }

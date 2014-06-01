@@ -1,4 +1,4 @@
-package org.opencv.samples.tutorial2;
+package org.opencv.samples.pagescanning;
 
 import java.io.File;
 import java.util.Date;
@@ -42,7 +42,7 @@ import android.view.Menu;
 import android.view.MenuItem;
 import android.view.WindowManager;
 
-public class Tutorial2Activity extends Activity implements CvCameraViewListener2 {
+public class pageScanningActivity extends Activity implements CvCameraViewListener2 {
 	private static final String    TAG = "OCVSample::Activity";
 	private static final String    Debug = "Debug";
 
@@ -112,7 +112,7 @@ public class Tutorial2Activity extends Activity implements CvCameraViewListener2
         }
     };
 
-    public Tutorial2Activity() {
+    public pageScanningActivity() {
         Log.i(TAG, "Instantiated new " + this.getClass());
     }
 
@@ -122,8 +122,8 @@ public class Tutorial2Activity extends Activity implements CvCameraViewListener2
         Log.i(TAG, "called onCreate");
         super.onCreate(savedInstanceState);
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
-        setContentView(R.layout.tutorial2_surface_view);
-        mOpenCvCameraView = (CameraBridgeViewBase) findViewById(R.id.tutorial2_activity_surface_view);
+        setContentView(R.layout.pagescanning_surface_view);
+        mOpenCvCameraView = (CameraBridgeViewBase) findViewById(R.id.pagescanning_activity_surface_view);
         mOpenCvCameraView.setCvCameraViewListener(this);
     }
 
@@ -199,9 +199,15 @@ public class Tutorial2Activity extends Activity implements CvCameraViewListener2
 		                    processing_addrs.add(Long.valueOf(processing_samples.get(processing_samples.size() - 1).getNativeObjAddr()));
 		        		}*/
 	        			Mat mRgb = new Mat(mRgba.size(), CvType.CV_8UC3);
+	        			Mat mBgr = new Mat(mRgba.size(), CvType.CV_8UC3);
 	        			Imgproc.cvtColor(mRgba, mRgb, Imgproc.COLOR_RGBA2RGB, 3);
 	        			processing_samples.add(mRgb);
 	        			processing_addrs.add(Long.valueOf(processing_samples.get(processing_samples.size() - 1).getNativeObjAddr()));
+	        			File root = Environment.getExternalStorageDirectory();        		
+	                	File file = new File(root, "DCIM/" + processing_samples.size() + ".jpg");
+	                	Log.i(Debug, file.getAbsolutePath());
+	                	Imgproc.cvtColor(mRgba, mBgr, Imgproc.COLOR_RGB2BGR, 3);
+	                	Highgui.imwrite(file.getAbsolutePath(), mBgr);
 	        		}
 	        		needCapture = false;
         		}
@@ -273,8 +279,9 @@ public class Tutorial2Activity extends Activity implements CvCameraViewListener2
         			if (result == null) {
         				result = new Mat(mRgba.size(), CvType.CV_8UC4);
         				File root = Environment.getExternalStorageDirectory();        		
-        				File file = new File(root, "DCIM/Camera/result.jpg");
+        				File file = new File(root, "DCIM/result.jpg");
         				Imgproc.resize(Highgui.imread(file.getAbsolutePath()), result, result.size());
+        				Imgproc.cvtColor(result, result, Imgproc.COLOR_RGBA2BGRA, 4);
         			}
         		}
         		else {
